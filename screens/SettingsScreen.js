@@ -300,7 +300,6 @@ export default function SettingsScreen() {
   const performImport = async (jsonString) => {
     try {
       const result = await importData(jsonString);
-      await refreshAll();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../store/AppStore';
 import { darkTheme, lightTheme, spacing, borderRadius, fontSize } from '../utils/theme';
+import { formatDateToStore } from '../utils/formatters';
 
 const QUICK_JOBS = [
   { name: 'Заправка кондиционера', price: 1500 },
@@ -22,15 +23,6 @@ const QUICK_JOBS = [
   { name: 'Замена свечей', price: 1000 },
   { name: 'Замена АКБ', price: 1200 },
 ];
-
-// БАГ 6: Форматирование даты без UTC смещения
-const formatLocalDate = (date) => {
-  const d = date instanceof Date ? date : new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 export const OrderForm = ({
   initialOrder,
@@ -140,7 +132,7 @@ export const OrderForm = ({
     setValidationError(''); // Сбрасываем предыдущую ошибку
 
     const orderData = {
-      date: initialOrder?.date || formatLocalDate(new Date()), // БАГ 6: без UTC смещения
+      date: initialOrder?.date || formatDateToStore(new Date()), // БАГ 6: без UTC смещения
       client: client.trim(),
       car: car.trim(),
       job: job.trim(),
