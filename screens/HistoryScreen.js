@@ -127,13 +127,12 @@ export default function HistoryScreen() {
 
   useEffect(() => {
     applyFilters();
-    updateMarkedDates();
   }, [applyFilters]);
 
-  const updateMarkedDates = () => {
+  const updateMarkedDates = useCallback(() => {
     const marked = {};
 
-    orders.forEach((order) => {
+    filteredOrders.forEach((order) => {
       if (!marked[order.date]) {
         marked[order.date] = {
           marked: true,
@@ -157,11 +156,11 @@ export default function HistoryScreen() {
     }
 
     setMarkedDates(marked);
-  };
+  }, [filteredOrders, selectedDate, theme]);
 
   useEffect(() => {
     updateMarkedDates();
-  }, [selectedDate, orders, theme]);
+  }, [updateMarkedDates]);
 
   const applyDateFilter = async () => {
     if (!startDate || !endDate) {

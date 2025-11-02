@@ -5,7 +5,7 @@ import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../store/AppStore';
-import { formatAmount } from '../utils/formatters';
+import { formatAmount, formatDateToStore } from '../utils/formatters';
 import {
   darkTheme,
   lightTheme,
@@ -23,15 +23,6 @@ const PERIODS = [
   { label: 'Год', days: 365 },
 ];
 
-// БАГ 8: Форматирование даты без UTC смещения
-const formatLocalDate = (date) => {
-  const d = date instanceof Date ? date : new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 export default function StatsScreen() {
   const { stats, refreshStats, theme: themeMode } = useAppStore();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
@@ -45,8 +36,8 @@ export default function StatsScreen() {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const start = formatLocalDate(startDate); // БАГ 8: без UTC смещения
-    const end = formatLocalDate(endDate); // БАГ 8: без UTC смещения
+    const start = formatDateToStore(startDate); // БАГ 8: без UTC смещения
+    const end = formatDateToStore(endDate); // БАГ 8: без UTC смещения
 
     await refreshStats(start, end);
   }, [selectedPeriod, refreshStats]);
