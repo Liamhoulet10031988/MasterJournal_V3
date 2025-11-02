@@ -1,0 +1,486 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  Text,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { TextInput, Button, RadioButton } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useAppStore } from '../store/AppStore';
+import { validateOrder } from '../utils/validators';
+import { darkTheme, lightTheme, spacing, borderRadius, fontSize } from '../utils/theme';
+
+const QUICK_JOBS = [
+  { name: 'Заправка кондиционера', price: 1500 },
+  { name: 'Диагностика', price: 500 },
+  { name: 'Замена масла', price: 800 },
+  { name: 'Ремонт стартера', price: 2000 },
+  { name: 'Замена свечей', price: 1000 },
+  { name: 'Замена АКБ', price: 1200 },
+];
+
+export default function HomeScreen() {
+  const { addOrder, searchClients, searchCars, theme: themeMode } = useAppStore();
+  const theme = themeMode === 'dark' ? darkTheme : lightTheme;
+
+  const [client, setClient] = useState('');
+  const [car, setCar] = useState('');
+  const [job, setJob] = useState('');
+  const [amount, setAmount] = useState('');
+  const [payType, setPayType] = useState('cash');
+  const [parts, setParts] = useState('');
+  const [freonGrams, setFreonGrams] = useState('');
+  const [comment, setComment] = useState('');
+
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [carSuggestions, setCarSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [showCarSuggestions, setShowCarSuggestions] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Подсказки клиентов
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (client.length >= 2) {
+        const results = await searchClients(client);
+        setClientSuggestions(results);
+      } else {
+        setClientSuggestions([]);
+      }
+    };
+    fetchSuggestions();
+  }, [client]);
+
+  // Подсказки авто
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (car.length >= 2) {
+        const results = await searchCars(car);
+        setCarSuggestions(results);
+      } else {
+        setCarSuggestions([]);
+      }
+    };
+    fetchSuggestions();
+  }, [car]);
+
+  const selectQuickJob = (jobItem) => {
+    setJob(jobItem.name);
+    setAmount(jobItem.price.toString());
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleSave = async () => {
+    const orderData = {
+      date: new Date().toISOString().split('T')[0],
+      client: client.trim(),
+      car: car.trim(),
+      job: job.trim(),
+      amount: parseInt(amount) || 0,
+      payType,
+      parts: parts.trim(),
+      freonGrams: freonGrams ? parseInt(freonGrams) : null,
+      comment: comment.trim(),
+    };
+
+    const { isValid, errors } = validateOrder(orderData);
+
+    if (!isValid) {
+      const errorMessages = Object.values(errors).join('\n');
+      Alert.alert('❌ Ошибка', errorMessages);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await addOrder(orderData);
+      
+      // Успех - хаптика и уведомление
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('✅ Успех', 'Заказ сохранён!');
+
+      // Очистка формы
+      setClient('');
+      setCar('');
+      setJob('');
+      setAmount('');
+      setPayType('cash');
+      setParts('');
+      setFreonGrams('');
+      setComment('');
+    } catch (error) {
+      Alert.alert('❌ Ошибка', error.message || 'Не удалось сохранить заказ');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Заголовок */}
+          <View style={styles.header}>
+            <Ionicons name="flash" size={28} color={theme.primary} />
+            <Text style={[styles.title, { color: theme.text }]}>Быстрый заказ</Text>
+          </View>
+
+          {/* Клиент */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              label="Клиент *"
+              value={client}
+              onChangeText={setClient}
+              onFocus={() => setShowClientSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+              style={[styles.input, { backgroundColor: theme.surface }]}
+              mode="outlined"
+              outlineColor={theme.border}
+              activeOutlineColor={theme.primary}
+              textColor={theme.text}
+              theme={{ colors: { placeholder: theme.textTertiary } }}
+            />
+            {showClientSuggestions && clientSuggestions.length > 0 && (
+              <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
+                {clientSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
+                    onPress={() => {
+                      setClient(suggestion);
+                      setShowClientSuggestions(false);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Ionicons name="person-outline" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.suggestionText, { color: theme.text }]}>
+                      {suggestion}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Авто */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              label="Машина"
+              value={car}
+              onChangeText={setCar}
+              onFocus={() => setShowCarSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowCarSuggestions(false), 200)}
+              style={[styles.input, { backgroundColor: theme.surface }]}
+              mode="outlined"
+              outlineColor={theme.border}
+              activeOutlineColor={theme.primary}
+              textColor={theme.text}
+              placeholder="Lada Priora"
+              theme={{ colors: { placeholder: theme.textTertiary } }}
+            />
+            {showCarSuggestions && carSuggestions.length > 0 && (
+              <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
+                {carSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
+                    onPress={() => {
+                      setCar(suggestion);
+                      setShowCarSuggestions(false);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Ionicons name="car-sport-outline" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.suggestionText, { color: theme.text }]}>
+                      {suggestion}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Быстрые работы */}
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            Быстрые работы:
+          </Text>
+          <View style={styles.quickJobs}>
+            {QUICK_JOBS.map((jobItem, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.quickJobChip, { 
+                  backgroundColor: theme.surfaceHighlight,
+                  borderColor: theme.border,
+                }]}
+                onPress={() => selectQuickJob(jobItem)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="flash" size={14} color={theme.primary} />
+                <Text style={[styles.quickJobText, { color: theme.text }]}>
+                  {jobItem.name}
+                </Text>
+                <Text style={[styles.quickJobPrice, { color: theme.primary }]}>
+                  {jobItem.price}₽
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Работа */}
+          <TextInput
+            label="Работа *"
+            value={job}
+            onChangeText={setJob}
+            style={[styles.input, { backgroundColor: theme.surface }]}
+            mode="outlined"
+            outlineColor={theme.border}
+            activeOutlineColor={theme.primary}
+            textColor={theme.text}
+            multiline
+            numberOfLines={2}
+            theme={{ colors: { placeholder: theme.textTertiary } }}
+          />
+
+          {/* Сумма */}
+          <TextInput
+            label="Сумма, ₽ *"
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            style={[styles.input, { backgroundColor: theme.surface }]}
+            mode="outlined"
+            outlineColor={theme.border}
+            activeOutlineColor={theme.primary}
+            textColor={theme.text}
+            theme={{ colors: { placeholder: theme.textTertiary } }}
+          />
+
+          {/* Оплата */}
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            Оплата:
+          </Text>
+          <RadioButton.Group onValueChange={setPayType} value={payType}>
+            <View style={[styles.radioContainer, { backgroundColor: theme.surface }]}>
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => {
+                  setPayType('cash');
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <RadioButton value="cash" color={theme.cash} />
+                <Text style={[styles.radioLabel, { color: theme.text }]}>💵 Нал</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => {
+                  setPayType('cashless');
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <RadioButton value="cashless" color={theme.cashless} />
+                <Text style={[styles.radioLabel, { color: theme.text }]}>💳 Безнал</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => {
+                  setPayType('debt');
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <RadioButton value="debt" color={theme.debt} />
+                <Text style={[styles.radioLabel, { color: theme.text }]}>⚠️ Долг</Text>
+              </TouchableOpacity>
+            </View>
+          </RadioButton.Group>
+
+          {/* Детали */}
+          <TextInput
+            label="Детали (если покупал)"
+            value={parts}
+            onChangeText={setParts}
+            style={[styles.input, { backgroundColor: theme.surface }]}
+            mode="outlined"
+            outlineColor={theme.border}
+            activeOutlineColor={theme.primary}
+            textColor={theme.text}
+            placeholder="Фильтр, масло..."
+            theme={{ colors: { placeholder: theme.textTertiary } }}
+          />
+
+          {/* Фреон */}
+          <TextInput
+            label="Граммы фреона"
+            value={freonGrams}
+            onChangeText={setFreonGrams}
+            keyboardType="numeric"
+            style={[styles.input, { backgroundColor: theme.surface }]}
+            mode="outlined"
+            outlineColor={theme.border}
+            activeOutlineColor={theme.primary}
+            textColor={theme.text}
+            placeholder="250"
+            theme={{ colors: { placeholder: theme.textTertiary } }}
+          />
+
+          {/* Комментарий */}
+          <TextInput
+            label="Комментарий"
+            value={comment}
+            onChangeText={setComment}
+            style={[styles.input, { backgroundColor: theme.surface }]}
+            mode="outlined"
+            outlineColor={theme.border}
+            activeOutlineColor={theme.primary}
+            textColor={theme.text}
+            multiline
+            numberOfLines={3}
+            theme={{ colors: { placeholder: theme.textTertiary } }}
+          />
+
+          {/* Кнопка сохранения */}
+          <Button
+            mode="contained"
+            onPress={handleSave}
+            style={[styles.saveButton, { backgroundColor: theme.primary }]}
+            contentStyle={styles.buttonContent}
+            labelStyle={[styles.buttonLabel, { color: theme.background }]}
+            icon="check-circle"
+            loading={saving}
+            disabled={saving}
+          >
+            {saving ? 'Сохранение...' : 'Сохранить заказ'}
+          </Button>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: 100,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  sectionTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  inputContainer: {
+    marginBottom: spacing.md,
+    position: 'relative',
+  },
+  input: {
+    marginBottom: spacing.md,
+  },
+  suggestions: {
+    position: 'absolute',
+    top: 58,
+    left: 0,
+    right: 0,
+    borderRadius: borderRadius.md,
+    zIndex: 1000,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  suggestionText: {
+    fontSize: fontSize.md,
+    flex: 1,
+  },
+  quickJobs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  quickJobChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+  },
+  quickJobText: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+  },
+  quickJobPrice: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  radioContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+  },
+  radioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  radioLabel: {
+    fontSize: fontSize.md,
+    marginLeft: spacing.xs,
+    fontWeight: '500',
+  },
+  saveButton: {
+    marginTop: spacing.xl,
+    borderRadius: borderRadius.lg,
+  },
+  buttonContent: {
+    paddingVertical: spacing.sm,
+  },
+  buttonLabel: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+  },
+});

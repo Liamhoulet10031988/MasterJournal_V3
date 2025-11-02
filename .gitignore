@@ -1,0 +1,12 @@
+﻿node_modules/
+.expo/
+.expo-shared/
+dist/
+*.log
+android/
+ios/
+.idea/
+.DS_Store
+.env
+*.apk
+*.aab

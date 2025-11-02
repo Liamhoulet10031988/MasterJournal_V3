@@ -1,0 +1,481 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ORDERS_KEY = '@orders';
+const DEBTS_KEY = '@debts';
+const DELETED_SNAPSHOTS_KEY = '@deleted_snapshots';
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+export const initStorage = async () => {
+  try {
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    if (!orders) {
+      await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify([]));
+    }
+    
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    if (!debts) {
+      await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify([]));
+    }
+    
+    console.log('✅ Storage initialized');
+  } catch (error) {
+    console.error('❌ Storage init error:', error);
+    throw new Error('Не удалось инициализировать хранилище');
+  }
+};
+
+// ==================== ЗАКАЗЫ ====================
+
+/**
+ * Сохранение заказа
+ * Если payType = 'debt', автоматически создаётся связанный открытый долг
+ */
+export const saveOrder = async (orderData) => {
+  try {
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    const ordersList = orders ? JSON.parse(orders) : [];
+    
+    const newOrder = {
+      id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...orderData,
+      createdAt: new Date().toISOString(),
+    };
+    
+    ordersList.unshift(newOrder);
+    await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(ordersList));
+    
+    // Автоматическое создание долга
+    if (orderData.payType === 'debt') {
+      await createDebt({
+        orderId: newOrder.id,
+        client: orderData.client,
+        car: orderData.car,
+        amount: orderData.amount,
+      });
+    }
+    
+    console.log('✅ Order saved:', newOrder.id);
+    return newOrder;
+  } catch (error) {
+    console.error('❌ Save order error:', error);
+    throw new Error('Не удалось сохранить заказ');
+  }
+};
+
+/**
+ * Получение заказов с пагинацией
+ * @param {number} limit - количество записей
+ * @param {number} offset - смещение
+ */
+export const getOrders = async (limit = 100, offset = 0) => {
+  try {
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    const ordersList = orders ? JSON.parse(orders) : [];
+    
+    return ordersList.slice(offset, offset + limit);
+  } catch (error) {
+    console.error('❌ Get orders error:', error);
+    return [];
+  }
+};
+
+/**
+ * Получение всех заказов (для статистики и экспорта)
+ */
+export const getAllOrders = async () => {
+  try {
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    return orders ? JSON.parse(orders) : [];
+  } catch (error) {
+    console.error('❌ Get all orders error:', error);
+    return [];
+  }
+};
+
+/**
+ * Удаление заказа с созданием снапшота для Undo
+ * @param {string} orderId 
+ * @param {boolean} deleteLinkedDebt - удалять ли связанный открытый долг
+ */
+export const deleteOrder = async (orderId, deleteLinkedDebt = true) => {
+  try {
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    const ordersList = orders ? JSON.parse(orders) : [];
+    
+    const orderIndex = ordersList.findIndex(o => o.id === orderId);
+    if (orderIndex === -1) {
+      throw new Error('Заказ не найден');
+    }
+    
+    const deletedOrder = ordersList[orderIndex];
+    
+    // Создаем снапшот для Undo
+    const snapshot = {
+      id: `snapshot_${Date.now()}`,
+      order: deletedOrder,
+      deletedDebt: null,
+      timestamp: Date.now(),
+    };
+    
+    // Удаляем связанный долг если нужно
+    let linkedDebt = null;
+    if (deleteLinkedDebt && deletedOrder.payType === 'debt') {
+      linkedDebt = await findDebtByOrderId(orderId);
+      if (linkedDebt && !linkedDebt.closed) {
+        await deleteDebt(linkedDebt.id);
+        snapshot.deletedDebt = linkedDebt;
+      }
+    }
+    
+    // Удаляем заказ
+    ordersList.splice(orderIndex, 1);
+    await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(ordersList));
+    
+    // Сохраняем снапшот
+    await saveSnapshot(snapshot);
+    
+    console.log('✅ Order deleted:', orderId);
+    return { deletedOrder, linkedDebt, snapshotId: snapshot.id };
+  } catch (error) {
+    console.error('❌ Delete order error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Восстановление удаленного заказа (Undo)
+ */
+export const undoDeleteOrder = async (snapshotId) => {
+  try {
+    const snapshots = await AsyncStorage.getItem(DELETED_SNAPSHOTS_KEY);
+    const snapshotsList = snapshots ? JSON.parse(snapshots) : [];
+    
+    const snapshot = snapshotsList.find(s => s.id === snapshotId);
+    if (!snapshot) {
+      throw new Error('Снапшот не найден');
+    }
+    
+    // Восстанавливаем заказ
+    const orders = await AsyncStorage.getItem(ORDERS_KEY);
+    const ordersList = orders ? JSON.parse(orders) : [];
+    ordersList.unshift(snapshot.order);
+    await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(ordersList));
+    
+    // Восстанавливаем долг если был
+    if (snapshot.deletedDebt) {
+      const debts = await AsyncStorage.getItem(DEBTS_KEY);
+      const debtsList = debts ? JSON.parse(debts) : [];
+      debtsList.unshift(snapshot.deletedDebt);
+      await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify(debtsList));
+    }
+    
+    // Удаляем снапшот
+    const updatedSnapshots = snapshotsList.filter(s => s.id !== snapshotId);
+    await AsyncStorage.setItem(DELETED_SNAPSHOTS_KEY, JSON.stringify(updatedSnapshots));
+    
+    console.log('✅ Order restored:', snapshot.order.id);
+    return { order: snapshot.order, debt: snapshot.deletedDebt };
+  } catch (error) {
+    console.error('❌ Undo delete error:', error);
+    throw error;
+  }
+};
+
+// ==================== ДОЛГИ ====================
+
+/**
+ * Создание долга
+ */
+const createDebt = async (debtData) => {
+  try {
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    const debtsList = debts ? JSON.parse(debts) : [];
+    
+    const newDebt = {
+      id: `debt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...debtData,
+      closed: false,
+      closedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    
+    debtsList.unshift(newDebt);
+    await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify(debtsList));
+    
+    console.log('✅ Debt created:', newDebt.id);
+    return newDebt;
+  } catch (error) {
+    console.error('❌ Create debt error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Получение долгов
+ * @param {boolean} onlyOpen - только открытые долги
+ */
+export const getDebts = async (onlyOpen = true) => {
+  try {
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    const debtsList = debts ? JSON.parse(debts) : [];
+    
+    if (onlyOpen) {
+      return debtsList.filter(d => !d.closed);
+    }
+    
+    return debtsList;
+  } catch (error) {
+    console.error('❌ Get debts error:', error);
+    return [];
+  }
+};
+
+/**
+ * Закрытие долга
+ */
+export const closeDebt = async (debtId) => {
+  try {
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    const debtsList = debts ? JSON.parse(debts) : [];
+    
+    const debtIndex = debtsList.findIndex(d => d.id === debtId);
+    if (debtIndex === -1) {
+      throw new Error('Долг не найден');
+    }
+    
+    debtsList[debtIndex].closed = true;
+    debtsList[debtIndex].closedAt = new Date().toISOString();
+    
+    await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify(debtsList));
+    
+    console.log('✅ Debt closed:', debtId);
+    return debtsList[debtIndex];
+  } catch (error) {
+    console.error('❌ Close debt error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Удаление долга (для каскадного удаления)
+ */
+const deleteDebt = async (debtId) => {
+  try {
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    const debtsList = debts ? JSON.parse(debts) : [];
+    
+    const filtered = debtsList.filter(d => d.id !== debtId);
+    await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify(filtered));
+    
+    console.log('✅ Debt deleted:', debtId);
+  } catch (error) {
+    console.error('❌ Delete debt error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Поиск долга по ID заказа
+ */
+const findDebtByOrderId = async (orderId) => {
+  try {
+    const debts = await AsyncStorage.getItem(DEBTS_KEY);
+    const debtsList = debts ? JSON.parse(debts) : [];
+    
+    return debtsList.find(d => d.orderId === orderId);
+  } catch (error) {
+    return null;
+  }
+};
+
+// ==================== ПОДСКАЗКИ ====================
+
+/**
+ * Топ-5 уникальных клиентов по подстроке
+ */
+export const searchClients = async (query) => {
+  try {
+    const orders = await getAllOrders();
+    
+    const clients = [...new Set(
+      orders
+        .map(o => o.client)
+        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
+    )];
+    
+    return clients.slice(0, 5);
+  } catch (error) {
+    return [];
+  }
+};
+
+/**
+ * Топ-5 уникальных авто по подстроке
+ */
+export const searchCars = async (query) => {
+  try {
+    const orders = await getAllOrders();
+    
+    const cars = [...new Set(
+      orders
+        .map(o => o.car)
+        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
+    )];
+    
+    return cars.slice(0, 5);
+  } catch (error) {
+    return [];
+  }
+};
+
+// ==================== СТАТИСТИКА ====================
+
+/**
+ * Статистика по диапазону дат
+ */
+export const getStats = async (startDate, endDate) => {
+  try {
+    const orders = await getAllOrders();
+    
+    const filtered = orders.filter(order => {
+      return order.date >= startDate && order.date <= endDate;
+    });
+    
+    const total = filtered.reduce((sum, order) => sum + order.amount, 0);
+    const count = filtered.length;
+    
+    const byType = filtered.reduce((acc, order) => {
+      const existing = acc.find(item => item.payType === order.payType);
+      if (existing) {
+        existing.total += order.amount;
+        existing.count += 1;
+      } else {
+        acc.push({
+          payType: order.payType,
+          total: order.amount,
+          count: 1,
+        });
+      }
+      return acc;
+    }, []);
+    
+    return { total, byType, count };
+  } catch (error) {
+    console.error('❌ Get stats error:', error);
+    return { total: 0, byType: [], count: 0 };
+  }
+};
+
+// ==================== ЭКСПОРТ/ИМПОРТ ====================
+
+/**
+ * Экспорт в JSON
+ */
+export const exportJSON = async () => {
+  try {
+    const orders = await getAllOrders();
+    const debts = await getDebts(false); // все долги
+    
+    return JSON.stringify({ orders, debts }, null, 2);
+  } catch (error) {
+    console.error('❌ Export JSON error:', error);
+    throw new Error('Не удалось экспортировать данные');
+  }
+};
+
+/**
+ * Экспорт в CSV
+ */
+export const exportCSV = async () => {
+  try {
+    const orders = await getAllOrders();
+    const debts = await getDebts(false);
+    
+    // CSV для заказов
+    let ordersCSV = 'ID,Дата,Клиент,Авто,Работа,Сумма,Оплата,Детали,Фреон,Комментарий\n';
+    orders.forEach(o => {
+      ordersCSV += `${o.id},${o.date},"${o.client}","${o.car}","${o.job}",${o.amount},${o.payType},"${o.parts || ''}",${o.freonGrams || ''},"${o.comment || ''}"\n`;
+    });
+    
+    // CSV для долгов
+    let debtsCSV = 'ID,Клиент,Авто,Сумма,Закрыт,Дата закрытия\n';
+    debts.forEach(d => {
+      debtsCSV += `${d.id},"${d.client}","${d.car}",${d.amount},${d.closed ? 'Да' : 'Нет'},${d.closedAt || ''}\n`;
+    });
+    
+    return { ordersCSV, debtsCSV };
+  } catch (error) {
+    console.error('❌ Export CSV error:', error);
+    throw new Error('Не удалось экспортировать CSV');
+  }
+};
+
+/**
+ * Импорт из JSON (слияние без дублей)
+ */
+export const importJSON = async (jsonString) => {
+  try {
+    const imported = JSON.parse(jsonString);
+    
+    if (!imported.orders || !imported.debts) {
+      throw new Error('Неверный формат JSON');
+    }
+    
+    // Слияние заказов
+    const existingOrders = await getAllOrders();
+    const existingOrderIds = new Set(existingOrders.map(o => o.id));
+    
+    const newOrders = imported.orders.filter(o => !existingOrderIds.has(o.id));
+    const mergedOrders = [...newOrders, ...existingOrders];
+    await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(mergedOrders));
+    
+    // Слияние долгов
+    const existingDebts = await getDebts(false);
+    const existingDebtIds = new Set(existingDebts.map(d => d.id));
+    
+    const newDebts = imported.debts.filter(d => !existingDebtIds.has(d.id));
+    const mergedDebts = [...newDebts, ...existingDebts];
+    await AsyncStorage.setItem(DEBTS_KEY, JSON.stringify(mergedDebts));
+    
+    console.log(`✅ Imported ${newOrders.length} orders, ${newDebts.length} debts`);
+    return { importedOrders: newOrders.length, importedDebts: newDebts.length };
+  } catch (error) {
+    console.error('❌ Import JSON error:', error);
+    throw new Error('Не удалось импортировать данные');
+  }
+};
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ====================
+
+/**
+ * Сохранение снапшота для Undo
+ */
+const saveSnapshot = async (snapshot) => {
+  try {
+    const snapshots = await AsyncStorage.getItem(DELETED_SNAPSHOTS_KEY);
+    const snapshotsList = snapshots ? JSON.parse(snapshots) : [];
+    
+    // Удаляем старые снапшоты (старше 5 минут)
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const filtered = snapshotsList.filter(s => s.timestamp > fiveMinutesAgo);
+    
+    filtered.push(snapshot);
+    await AsyncStorage.setItem(DELETED_SNAPSHOTS_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error('❌ Save snapshot error:', error);
+  }
+};
+
+/**
+ * Очистка всех данных (для тестирования)
+ */
+export const clearAllData = async () => {
+  try {
+    await AsyncStorage.multiRemove([ORDERS_KEY, DEBTS_KEY, DELETED_SNAPSHOTS_KEY]);
+    await initStorage();
+    console.log('✅ All data cleared');
+  } catch (error) {
+    console.error('❌ Clear data error:', error);
+    throw error;
+  }
+};
