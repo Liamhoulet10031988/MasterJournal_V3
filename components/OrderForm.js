@@ -23,7 +23,21 @@ const QUICK_JOBS = [
   { name: 'Замена АКБ', price: 1200 },
 ];
 
-export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'Сохранить заказ' }) => {
+// БАГ 6: Форматирование даты без UTC смещения
+const formatLocalDate = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const OrderForm = ({
+  initialOrder,
+  onSubmit,
+  onCancel,
+  submitLabel = 'Сохранить заказ',
+}) => {
   const { searchClients, searchCars, theme: themeMode } = useAppStore();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
@@ -32,7 +46,9 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
   const [job, setJob] = useState(initialOrder?.job || '');
   const [workAmount, setWorkAmount] = useState(initialOrder?.workAmount?.toString() || '');
   const [ourParts, setOurParts] = useState(initialOrder?.ourParts || '');
-  const [ourPartsAmount, setOurPartsAmount] = useState(initialOrder?.ourPartsAmount?.toString() || '');
+  const [ourPartsAmount, setOurPartsAmount] = useState(
+    initialOrder?.ourPartsAmount?.toString() || '',
+  );
   const [clientParts, setClientParts] = useState(initialOrder?.clientParts || '');
   const [payType, setPayType] = useState(initialOrder?.payType || 'cash');
   const [freonGrams, setFreonGrams] = useState(initialOrder?.freonGrams?.toString() || '');
@@ -124,7 +140,7 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
     setValidationError(''); // Сбрасываем предыдущую ошибку
 
     const orderData = {
-      date: initialOrder?.date || new Date().toISOString().split('T')[0],
+      date: initialOrder?.date || formatLocalDate(new Date()), // БАГ 6: без UTC смещения
       client: client.trim(),
       car: car.trim(),
       job: job.trim(),
@@ -178,304 +194,295 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
     <View style={styles.formContainer}>
       {/* Клиент */}
       <View style={styles.inputContainer}>
-          <TextInput
-            label="Клиент *"
-            value={client}
-            onChangeText={setClient}
-            onFocus={() => setShowClientSuggestions(true)}
-            onBlur={() => {
-              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-              blurTimerRef.current = setTimeout(() => setShowClientSuggestions(false), 200);
-            }}
-            style={[styles.input, { backgroundColor: theme.surface }]}
-            mode="outlined"
-            outlineColor={theme.border}
-            activeOutlineColor={theme.primary}
-            textColor={theme.text}
-            theme={{ colors: { placeholder: theme.textTertiary } }}
-          />
-          {validationError && !client && (
-            <HelperText type="error" visible={true}>
-              {validationError}
-            </HelperText>
-          )}
-          {showClientSuggestions && clientSuggestions.length > 0 && (
-            <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
-              {clientSuggestions.map((suggestion, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
-                  onPress={() => {
-                    setClient(suggestion);
-                    setShowClientSuggestions(false);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <Ionicons name="person-outline" size={16} color={theme.textSecondary} />
-                  <Text style={[styles.suggestionText, { color: theme.text }]}>
-                    {suggestion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+        <TextInput
+          label="Клиент *"
+          value={client}
+          onChangeText={setClient}
+          onFocus={() => setShowClientSuggestions(true)}
+          onBlur={() => {
+            if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = setTimeout(() => setShowClientSuggestions(false), 200);
+          }}
+          style={[styles.input, { backgroundColor: theme.surface }]}
+          mode="outlined"
+          outlineColor={theme.border}
+          activeOutlineColor={theme.primary}
+          textColor={theme.text}
+          theme={{ colors: { placeholder: theme.textTertiary } }}
+        />
+        {validationError && !client && (
+          <HelperText type="error" visible={true}>
+            {validationError}
+          </HelperText>
+        )}
+        {showClientSuggestions && clientSuggestions.length > 0 && (
+          <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
+            {clientSuggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
+                onPress={() => {
+                  setClient(suggestion);
+                  setShowClientSuggestions(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Ionicons name="person-outline" size={16} color={theme.textSecondary} />
+                <Text style={[styles.suggestionText, { color: theme.text }]}>{suggestion}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
 
-        {/* Авто */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            label="Машина"
-            value={car}
-            onChangeText={setCar}
-            onFocus={() => setShowCarSuggestions(true)}
-            onBlur={() => {
-              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-              blurTimerRef.current = setTimeout(() => setShowCarSuggestions(false), 200);
-            }}
-            style={[styles.input, { backgroundColor: theme.surface }]}
-            mode="outlined"
-            outlineColor={theme.border}
-            activeOutlineColor={theme.primary}
-            textColor={theme.text}
-            placeholder="Lada Priora"
-            theme={{ colors: { placeholder: theme.textTertiary } }}
-          />
-          {showCarSuggestions && carSuggestions.length > 0 && (
-            <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
-              {carSuggestions.map((suggestion, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
-                  onPress={() => {
-                    setCar(suggestion);
-                    setShowCarSuggestions(false);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <Ionicons name="car-sport-outline" size={16} color={theme.textSecondary} />
-                  <Text style={[styles.suggestionText, { color: theme.text }]}>
-                    {suggestion}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
+      {/* Авто */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          label="Машина"
+          value={car}
+          onChangeText={setCar}
+          onFocus={() => setShowCarSuggestions(true)}
+          onBlur={() => {
+            if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = setTimeout(() => setShowCarSuggestions(false), 200);
+          }}
+          style={[styles.input, { backgroundColor: theme.surface }]}
+          mode="outlined"
+          outlineColor={theme.border}
+          activeOutlineColor={theme.primary}
+          textColor={theme.text}
+          placeholder="Lada Priora"
+          theme={{ colors: { placeholder: theme.textTertiary } }}
+        />
+        {showCarSuggestions && carSuggestions.length > 0 && (
+          <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
+            {carSuggestions.map((suggestion, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.suggestionItem, { borderBottomColor: theme.border }]}
+                onPress={() => {
+                  setCar(suggestion);
+                  setShowCarSuggestions(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Ionicons name="car-sport-outline" size={16} color={theme.textSecondary} />
+                <Text style={[styles.suggestionText, { color: theme.text }]}>{suggestion}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
 
-        {!initialOrder && (
-          <>
-            {/* Быстрые работы */}
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-              Быстрые работы:
-            </Text>
-            <View style={styles.quickJobs}>
-              {QUICK_JOBS.map((jobItem, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.quickJobChip, { 
+      {!initialOrder && (
+        <>
+          {/* Быстрые работы */}
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Быстрые работы:</Text>
+          <View style={styles.quickJobs}>
+            {QUICK_JOBS.map((jobItem, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.quickJobChip,
+                  {
                     backgroundColor: theme.surfaceHighlight,
                     borderColor: theme.border,
-                  }]}
-                  onPress={() => selectQuickJob(jobItem)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="flash" size={14} color={theme.primary} />
-                  <Text style={[styles.quickJobText, { color: theme.text }]}>
-                    {jobItem.name}
-                  </Text>
-                  <Text style={[styles.quickJobPrice, { color: theme.primary }]}>
-                    {jobItem.price}₽
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Работа */}
-        <TextInput
-          label="Работа *"
-          value={job}
-          onChangeText={setJob}
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          multiline
-          numberOfLines={2}
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
-
-        {/* Сумма работы */}
-        <TextInput
-          label="Сумма работы, ₽ *"
-          value={workAmount}
-          onChangeText={setWorkAmount}
-          keyboardType="numeric"
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
-
-        {/* Наши детали */}
-        <TextInput
-          label="Детали наши (описание)"
-          value={ourParts}
-          onChangeText={setOurParts}
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          placeholder="Фильтр, масло..."
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
-
-        {/* Сумма наших деталей */}
-        <TextInput
-          label="Сумма деталей наших, ₽"
-          value={ourPartsAmount}
-          onChangeText={setOurPartsAmount}
-          keyboardType="numeric"
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
-
-        {/* Детали клиента */}
-        <TextInput
-          label="Детали клиента"
-          value={clientParts}
-          onChangeText={setClientParts}
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          placeholder="Что принёс клиент..."
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
-
-        {/* Итоговая сумма (только отображение) */}
-        {totalAmount > 0 && (
-          <View style={[styles.totalContainer, { backgroundColor: theme.surfaceHighlight }]}>
-            <Text style={[styles.totalLabel, { color: theme.textSecondary }]}>
-              Итого:
-            </Text>
-            <Text style={[styles.totalAmount, { color: theme.primary }]}>
-              {totalAmount.toLocaleString('ru-RU')} ₽
-            </Text>
+                  },
+                ]}
+                onPress={() => selectQuickJob(jobItem)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="flash" size={14} color={theme.primary} />
+                <Text style={[styles.quickJobText, { color: theme.text }]}>{jobItem.name}</Text>
+                <Text style={[styles.quickJobPrice, { color: theme.primary }]}>
+                  {jobItem.price}₽
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        )}
+        </>
+      )}
 
-        {/* Оплата */}
-        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-          Оплата:
-        </Text>
-        <RadioButton.Group onValueChange={setPayType} value={payType}>
-          <View style={[styles.radioContainer, { backgroundColor: theme.surface }]}>
-            <TouchableOpacity
-              style={styles.radioItem}
-              onPress={() => {
-                setPayType('cash');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <RadioButton value="cash" color={theme.cash} />
-              <Text style={[styles.radioLabel, { color: theme.text }]}>💵 Нал</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.radioItem}
-              onPress={() => {
-                setPayType('cashless');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <RadioButton value="cashless" color={theme.cashless} />
-              <Text style={[styles.radioLabel, { color: theme.text }]}>💳 Безнал</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.radioItem}
-              onPress={() => {
-                setPayType('debt');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <RadioButton value="debt" color={theme.debt} />
-              <Text style={[styles.radioLabel, { color: theme.text }]}>⚠️ Долг</Text>
-            </TouchableOpacity>
-          </View>
-        </RadioButton.Group>
+      {/* Работа */}
+      <TextInput
+        label="Работа *"
+        value={job}
+        onChangeText={setJob}
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        multiline
+        numberOfLines={2}
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
 
-        {/* Фреон */}
-        <TextInput
-          label="Граммы фреона"
-          value={freonGrams}
-          onChangeText={setFreonGrams}
-          keyboardType="numeric"
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          placeholder="250"
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
+      {/* Сумма работы */}
+      <TextInput
+        label="Сумма работы, ₽ *"
+        value={workAmount}
+        onChangeText={setWorkAmount}
+        keyboardType="numeric"
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
 
-        {/* Комментарий */}
-        <TextInput
-          label="Комментарий"
-          value={comment}
-          onChangeText={setComment}
-          style={[styles.input, { backgroundColor: theme.surface }]}
-          mode="outlined"
-          outlineColor={theme.border}
-          activeOutlineColor={theme.primary}
-          textColor={theme.text}
-          multiline
-          numberOfLines={3}
-          theme={{ colors: { placeholder: theme.textTertiary } }}
-        />
+      {/* Наши детали */}
+      <TextInput
+        label="Детали наши (описание)"
+        value={ourParts}
+        onChangeText={setOurParts}
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        placeholder="Фильтр, масло..."
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
 
-        {/* Кнопки */}
-        <View style={styles.buttonsContainer}>
+      {/* Сумма наших деталей */}
+      <TextInput
+        label="Сумма деталей наших, ₽"
+        value={ourPartsAmount}
+        onChangeText={setOurPartsAmount}
+        keyboardType="numeric"
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
+
+      {/* Детали клиента */}
+      <TextInput
+        label="Детали клиента"
+        value={clientParts}
+        onChangeText={setClientParts}
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        placeholder="Что принёс клиент..."
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
+
+      {/* Итоговая сумма (только отображение) */}
+      {totalAmount > 0 && (
+        <View style={[styles.totalContainer, { backgroundColor: theme.surfaceHighlight }]}>
+          <Text style={[styles.totalLabel, { color: theme.textSecondary }]}>Итого:</Text>
+          <Text style={[styles.totalAmount, { color: theme.primary }]}>
+            {totalAmount.toLocaleString('ru-RU')} ₽
+          </Text>
+        </View>
+      )}
+
+      {/* Оплата */}
+      <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Оплата:</Text>
+      <RadioButton.Group onValueChange={setPayType} value={payType}>
+        <View style={[styles.radioContainer, { backgroundColor: theme.surface }]}>
+          <TouchableOpacity
+            style={styles.radioItem}
+            onPress={() => {
+              setPayType('cash');
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <RadioButton value="cash" color={theme.cash} />
+            <Text style={[styles.radioLabel, { color: theme.text }]}>💵 Нал</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.radioItem}
+            onPress={() => {
+              setPayType('cashless');
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <RadioButton value="cashless" color={theme.cashless} />
+            <Text style={[styles.radioLabel, { color: theme.text }]}>💳 Безнал</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.radioItem}
+            onPress={() => {
+              setPayType('debt');
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <RadioButton value="debt" color={theme.debt} />
+            <Text style={[styles.radioLabel, { color: theme.text }]}>⚠️ Долг</Text>
+          </TouchableOpacity>
+        </View>
+      </RadioButton.Group>
+
+      {/* Фреон */}
+      <TextInput
+        label="Граммы фреона"
+        value={freonGrams}
+        onChangeText={setFreonGrams}
+        keyboardType="numeric"
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        placeholder="250"
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
+
+      {/* Комментарий */}
+      <TextInput
+        label="Комментарий"
+        value={comment}
+        onChangeText={setComment}
+        style={[styles.input, { backgroundColor: theme.surface }]}
+        mode="outlined"
+        outlineColor={theme.border}
+        activeOutlineColor={theme.primary}
+        textColor={theme.text}
+        multiline
+        numberOfLines={3}
+        theme={{ colors: { placeholder: theme.textTertiary } }}
+      />
+
+      {/* Кнопки */}
+      <View style={styles.buttonsContainer}>
+        <Button
+          mode="contained"
+          onPress={handleSubmit}
+          style={[styles.submitButton, { backgroundColor: theme.primary }]}
+          contentStyle={styles.buttonContent}
+          labelStyle={[styles.buttonLabel, { color: theme.background }]}
+          icon="check-circle"
+          loading={saving}
+          disabled={saving}
+        >
+          {saving ? 'Сохранение...' : submitLabel}
+        </Button>
+
+        {onCancel && (
           <Button
-            mode="contained"
-            onPress={handleSubmit}
-            style={[styles.submitButton, { backgroundColor: theme.primary }]}
+            mode="outlined"
+            onPress={onCancel}
+            style={styles.cancelButton}
             contentStyle={styles.buttonContent}
-            labelStyle={[styles.buttonLabel, { color: theme.background }]}
-            icon="check-circle"
-            loading={saving}
+            labelStyle={styles.buttonLabel}
+            textColor={theme.textSecondary}
             disabled={saving}
           >
-            {saving ? 'Сохранение...' : submitLabel}
+            Отмена
           </Button>
-
-          {onCancel && (
-            <Button
-              mode="outlined"
-              onPress={onCancel}
-              style={styles.cancelButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={styles.buttonLabel}
-              textColor={theme.textSecondary}
-              disabled={saving}
-            >
-              Отмена
-            </Button>
-          )}
-        </View>
+        )}
       </View>
+    </View>
   );
 };
 

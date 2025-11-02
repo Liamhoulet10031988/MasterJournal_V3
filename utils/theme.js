@@ -6,35 +6,35 @@ export const darkTheme = {
   background: '#0B0E11',
   surface: '#121418',
   surfaceHighlight: '#1B1F24',
-  
+
   // Текст
   text: '#E6EAF2',
   textSecondary: '#9AA4B2',
   textTertiary: '#7A8694',
-  
+
   // Акцент (циан)
   primary: '#00E0FF',
   primaryGlow: 'rgba(0, 224, 255, 0.2)',
-  
+
   // Статусы
   success: '#22C55E',
   info: '#3B82F6',
   warning: '#F59E0B',
   error: '#EF4444',
-  
+
   // Типы оплаты
   cash: '#22C55E',
   cashless: '#3B82F6',
   debt: '#F59E0B',
-  
+
   // Границы и делители
   border: '#262B31',
   divider: 'rgba(38, 43, 49, 0.2)',
-  
+
   // Тени и свечение (неон)
   shadow: 'rgba(0, 0, 0, 0.5)',
   glow: 'rgba(0, 224, 255, 0.15)',
-  
+
   // Прозрачности
   overlay: 'rgba(11, 14, 17, 0.95)',
   backdrop: 'rgba(0, 0, 0, 0.7)',
@@ -48,35 +48,35 @@ export const lightTheme = {
   background: '#F6F7FA',
   surface: '#FFFFFF',
   surfaceHighlight: '#EEF2F6',
-  
+
   // Текст
   text: '#0E1420',
   textSecondary: '#4B5563',
   textTertiary: '#6B7280',
-  
+
   // Акцент
   primary: '#2563EB',
   primaryGlow: 'rgba(37, 99, 235, 0.1)',
-  
+
   // Статусы
   success: '#16A34A',
   info: '#2563EB',
   warning: '#F59E0B',
   error: '#DC2626',
-  
+
   // Типы оплаты
   cash: '#16A34A',
   cashless: '#2563EB',
   debt: '#F59E0B',
-  
+
   // Границы и делители
   border: '#E5E7EB',
   divider: 'rgba(229, 231, 235, 0.6)',
-  
+
   // Тени
   shadow: 'rgba(0, 0, 0, 0.1)',
   glow: 'rgba(37, 99, 235, 0.05)',
-  
+
   // Прозрачности
   overlay: 'rgba(255, 255, 255, 0.95)',
   backdrop: 'rgba(0, 0, 0, 0.5)',

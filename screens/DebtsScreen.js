@@ -26,11 +26,11 @@ export default function DebtsScreen() {
     setRefreshing(true);
     await refreshDebts();
     setRefreshing(false);
-  }, []);
+  }, [refreshDebts]); // БАГ 7: добавлены зависимости
 
   const handleCloseDebt = (debt) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    
+
     Alert.alert(
       '💰 Погасить долг?',
       `Клиент: ${debt.client}\nСумма: ${formatAmount(debt.amount)}`,
@@ -52,16 +52,14 @@ export default function DebtsScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const renderEmpty = () => (
     <View style={styles.emptyState}>
       <Ionicons name="checkmark-circle-outline" size={64} color={theme.success} />
-      <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-        Все долги погашены! 🎉
-      </Text>
+      <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Все долги погашены! 🎉</Text>
       <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
         Новые долги появятся при создании заказа с оплатой "Долг"
       </Text>
@@ -69,11 +67,7 @@ export default function DebtsScreen() {
   );
 
   const renderItem = ({ item }) => (
-    <DebtCard
-      debt={item}
-      theme={theme}
-      onClose={() => handleCloseDebt(item)}
-    />
+    <DebtCard debt={item} theme={theme} onClose={() => handleCloseDebt(item)} />
   );
 
   const totalDebt = debts.reduce((sum, debt) => sum + debt.amount, 0);
@@ -88,7 +82,12 @@ export default function DebtsScreen() {
             <Text style={[styles.title, { color: theme.text }]}>Долги</Text>
           </View>
           {debts.length > 0 && (
-            <View style={[styles.totalBadge, { backgroundColor: `${theme.debt}20`, borderColor: theme.debt }]}>
+            <View
+              style={[
+                styles.totalBadge,
+                { backgroundColor: `${theme.debt}20`, borderColor: theme.debt },
+              ]}
+            >
               <Text style={[styles.totalText, { color: theme.debt }]}>
                 {formatAmount(totalDebt)}
               </Text>
@@ -124,7 +123,7 @@ const DebtCard = ({ debt, theme, onClose }) => (
     <Card.Content>
       {/* Вертикальная полоса */}
       <View style={[styles.statusBar, { backgroundColor: theme.debt }]} />
-      
+
       <View style={styles.cardContent}>
         {/* Клиент */}
         <View style={styles.clientRow}>
@@ -146,10 +145,13 @@ const DebtCard = ({ debt, theme, onClose }) => (
 
         {/* Сумма и кнопка */}
         <View style={styles.footer}>
-          <View style={[styles.amountContainer, { backgroundColor: `${theme.debt}15`, borderColor: theme.debt }]}>
-            <Text style={[styles.amount, { color: theme.debt }]}>
-              {formatAmount(debt.amount)}
-            </Text>
+          <View
+            style={[
+              styles.amountContainer,
+              { backgroundColor: `${theme.debt}15`, borderColor: theme.debt },
+            ]}
+          >
+            <Text style={[styles.amount, { color: theme.debt }]}>{formatAmount(debt.amount)}</Text>
           </View>
 
           <Button

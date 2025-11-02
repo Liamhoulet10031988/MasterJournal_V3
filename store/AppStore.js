@@ -15,12 +15,20 @@ export const useAppStore = () => {
 export const AppStoreProvider = ({ children }) => {
   const [orders, setOrders] = useState([]);
   const [debts, setDebts] = useState([]);
-  const [stats, setStats] = useState({ total: 0, totalWork: 0, totalOurParts: 0, byType: [], count: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    totalWork: 0,
+    totalOurParts: 0,
+    byType: [],
+    count: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState('dark'); // 'dark' | 'light'
+  // БАГ 10: Сохраняем текущий диапазон статистики
+  const [statsDateRange, setStatsDateRange] = useState({ startDate: null, endDate: null });
 
   // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-  
+
   useEffect(() => {
     init();
   }, []);
@@ -29,13 +37,13 @@ export const AppStoreProvider = ({ children }) => {
     try {
       setLoading(true);
       await storage.initStorage();
-      
+
       // ИСПРАВЛЕНИЕ БАГ 12: Загрузка сохраненной темы
       const savedTheme = await AsyncStorage.getItem('@theme');
       if (savedTheme === 'light' || savedTheme === 'dark') {
         setTheme(savedTheme);
       }
-      
+
       await refreshAll();
     } catch (error) {
       console.error('Store init error:', error);
@@ -47,11 +55,7 @@ export const AppStoreProvider = ({ children }) => {
   // ==================== ОБНОВЛЕНИЕ ДАННЫХ ====================
 
   const refreshAll = async () => {
-    await Promise.all([
-      refreshOrders(),
-      refreshDebts(),
-      refreshStats(),
-    ]);
+    await Promise.all([refreshOrders(), refreshDebts(), refreshStats()]);
   };
 
   // ИСПРАВЛЕНИЕ БАГ 10: Загружаем все заказы, а не только 100
@@ -84,11 +88,14 @@ export const AppStoreProvider = ({ children }) => {
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
         const end = now;
-        
+
         startDate = start.toISOString().split('T')[0];
         endDate = end.toISOString().split('T')[0];
       }
-      
+
+      // БАГ 10: Сохраняем текущий диапазон
+      setStatsDateRange({ startDate, endDate });
+
       const data = await storage.getStats(startDate, endDate);
       setStats(data);
       return data;
@@ -103,10 +110,10 @@ export const AppStoreProvider = ({ children }) => {
   const addOrder = async (orderData) => {
     try {
       const newOrder = await storage.saveOrder(orderData);
-      
+
       // Обновляем все связанные данные
       await refreshAll();
-      
+
       return newOrder;
     } catch (error) {
       console.error('Add order error:', error);
@@ -117,10 +124,10 @@ export const AppStoreProvider = ({ children }) => {
   const updateOrder = async (orderId, orderPatch) => {
     try {
       const updatedOrder = await storage.updateOrder(orderId, orderPatch);
-      
+
       // Обновляем все связанные данные
       await refreshAll();
-      
+
       return updatedOrder;
     } catch (error) {
       console.error('Update order error:', error);
@@ -131,10 +138,10 @@ export const AppStoreProvider = ({ children }) => {
   const removeOrder = async (orderId, deleteLinkedDebt = true) => {
     try {
       const result = await storage.deleteOrder(orderId, deleteLinkedDebt);
-      
+
       // Обновляем все связанные данные
       await refreshAll();
-      
+
       return result;
     } catch (error) {
       console.error('Remove order error:', error);
@@ -145,10 +152,10 @@ export const AppStoreProvider = ({ children }) => {
   const undoRemove = async (snapshotId) => {
     try {
       const result = await storage.undoDeleteOrder(snapshotId);
-      
+
       // Обновляем все связанные данные
       await refreshAll();
-      
+
       return result;
     } catch (error) {
       console.error('Undo remove error:', error);
@@ -179,11 +186,16 @@ export const AppStoreProvider = ({ children }) => {
   const closeDebtAction = async (debtId) => {
     try {
       await storage.closeDebt(debtId);
-      
-      // Обновляем долги и статистику
+
+      // Обновляем долги и статистику с сохраненным диапазоном
       await refreshDebts();
-      await refreshStats();
-      
+      // БАГ 10: Используем сохраненный диапазон, чтобы не сбрасывать фильтр
+      if (statsDateRange.startDate && statsDateRange.endDate) {
+        await refreshStats(statsDateRange.startDate, statsDateRange.endDate);
+      } else {
+        await refreshStats();
+      }
+
       return true;
     } catch (error) {
       console.error('Close debt error:', error);
@@ -196,25 +208,27 @@ export const AppStoreProvider = ({ children }) => {
   // ИСПРАВЛЕНИЕ БАГ 11: Используем orders из стейта, не читаем AsyncStorage каждый раз
   const searchClients = (query) => {
     if (!query || query.length < 2) return [];
-    
-    const clients = [...new Set(
-      orders
-        .map(o => o.client)
-        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
-    )];
-    
+
+    const clients = [
+      ...new Set(
+        orders
+          .map((o) => o.client)
+          .filter((c) => c && c.toLowerCase().includes(query.toLowerCase())),
+      ),
+    ];
+
     return clients.slice(0, 5);
   };
 
   const searchCars = (query) => {
     if (!query || query.length < 2) return [];
-    
-    const cars = [...new Set(
-      orders
-        .map(o => o.car)
-        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
-    )];
-    
+
+    const cars = [
+      ...new Set(
+        orders.map((o) => o.car).filter((c) => c && c.toLowerCase().includes(query.toLowerCase())),
+      ),
+    ];
+
     return cars.slice(0, 5);
   };
 
@@ -267,63 +281,62 @@ export const AppStoreProvider = ({ children }) => {
   // ==================== КОНТЕКСТ ====================
 
   // ИСПРАВЛЕНИЕ БАГ 13: Мемоизация value для предотвращения лишних рендеров
-  const value = useMemo(() => ({
-    // Состояние
-    orders,
-    debts,
-    stats,
-    loading,
-    theme,
-    
-    // Действия
-    refreshAll,
-    refreshOrders,
-    refreshDebts,
-    refreshStats,
-    
-    addOrder,
-    updateOrder,
-    removeOrder,
-    undoRemove,
-    getOrderById,
-    searchByDateRange,
-    
-    closeDebt: closeDebtAction,
-    
-    searchClients,
-    searchCars,
-    
-    exportData,
-    importData,
-    
-    toggleTheme,
-  }), [
-    orders, 
-    debts, 
-    stats, 
-    loading, 
-    theme,
-    refreshAll,
-    refreshOrders,
-    refreshDebts,
-    refreshStats,
-    addOrder,
-    updateOrder,
-    removeOrder,
-    undoRemove,
-    getOrderById,
-    searchByDateRange,
-    closeDebtAction,
-    searchClients,
-    searchCars,
-    exportData,
-    importData,
-    toggleTheme,
-  ]);
+  const value = useMemo(
+    () => ({
+      // Состояние
+      orders,
+      debts,
+      stats,
+      loading,
+      theme,
 
-  return (
-    <AppStoreContext.Provider value={value}>
-      {children}
-    </AppStoreContext.Provider>
+      // Действия
+      refreshAll,
+      refreshOrders,
+      refreshDebts,
+      refreshStats,
+
+      addOrder,
+      updateOrder,
+      removeOrder,
+      undoRemove,
+      getOrderById,
+      searchByDateRange,
+
+      closeDebt: closeDebtAction,
+
+      searchClients,
+      searchCars,
+
+      exportData,
+      importData,
+
+      toggleTheme,
+    }),
+    [
+      orders,
+      debts,
+      stats,
+      loading,
+      theme,
+      refreshAll,
+      refreshOrders,
+      refreshDebts,
+      refreshStats,
+      addOrder,
+      updateOrder,
+      removeOrder,
+      undoRemove,
+      getOrderById,
+      searchByDateRange,
+      closeDebtAction,
+      searchClients,
+      searchCars,
+      exportData,
+      importData,
+      toggleTheme,
+    ],
   );
+
+  return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
 };

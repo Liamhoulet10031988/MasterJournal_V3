@@ -11,7 +11,7 @@ export const formatAmount = (amount) => {
  */
 export const formatDate = (dateString) => {
   if (!dateString) return '';
-  
+
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
@@ -29,7 +29,7 @@ export const formatDate = (dateString) => {
  */
 export const formatDateTime = (isoString) => {
   if (!isoString) return '';
-  
+
   try {
     const date = new Date(isoString);
     return date.toLocaleString('ru-RU', {
@@ -82,11 +82,11 @@ export const getPayTypeShort = (payType) => {
 export const formatDateRange = (startDate, endDate) => {
   const start = formatDate(startDate);
   const end = formatDate(endDate);
-  
+
   if (start === end) {
     return start;
   }
-  
+
   return `${start} — ${end}`;
 };
 
@@ -95,17 +95,17 @@ export const formatDateRange = (startDate, endDate) => {
  */
 export const getRelativeDate = (dateString) => {
   if (!dateString) return '';
-  
+
   try {
     const date = new Date(dateString);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     const dateStr = date.toDateString();
     const todayStr = today.toDateString();
     const yesterdayStr = yesterday.toDateString();
-    
+
     if (dateStr === todayStr) {
       return 'Сегодня';
     } else if (dateStr === yesterdayStr) {
