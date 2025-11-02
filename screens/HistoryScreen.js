@@ -110,7 +110,7 @@ export default function HistoryScreen() {
 
   useEffect(() => {
     updateMarkedDates();
-  }, [selectedDate, orders]);
+  }, [selectedDate, orders, theme]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -172,7 +172,7 @@ export default function HistoryScreen() {
     setRefreshing(true);
     await refreshOrders();
     setRefreshing(false);
-  }, []);
+  }, [refreshOrders]);
 
   const showOrderDetails = (order) => {
     setSelectedOrder(order);

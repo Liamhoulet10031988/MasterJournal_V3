@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as storage from '../lib/storage';
 
 const AppStoreContext = createContext();
@@ -28,6 +29,13 @@ export const AppStoreProvider = ({ children }) => {
     try {
       setLoading(true);
       await storage.initStorage();
+      
+      // ИСПРАВЛЕНИЕ БАГ 12: Загрузка сохраненной темы
+      const savedTheme = await AsyncStorage.getItem('@theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setTheme(savedTheme);
+      }
+      
       await refreshAll();
     } catch (error) {
       console.error('Store init error:', error);
@@ -46,9 +54,10 @@ export const AppStoreProvider = ({ children }) => {
     ]);
   };
 
-  const refreshOrders = async (limit = 100, offset = 0) => {
+  // ИСПРАВЛЕНИЕ БАГ 10: Загружаем все заказы, а не только 100
+  const refreshOrders = async () => {
     try {
-      const data = await storage.getOrders(limit, offset);
+      const data = await storage.getAllOrders();
       setOrders(data);
       return data;
     } catch (error) {
@@ -184,14 +193,29 @@ export const AppStoreProvider = ({ children }) => {
 
   // ==================== ПОДСКАЗКИ ====================
 
-  const searchClients = async (query) => {
+  // ИСПРАВЛЕНИЕ БАГ 11: Используем orders из стейта, не читаем AsyncStorage каждый раз
+  const searchClients = (query) => {
     if (!query || query.length < 2) return [];
-    return await storage.searchClients(query);
+    
+    const clients = [...new Set(
+      orders
+        .map(o => o.client)
+        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
+    )];
+    
+    return clients.slice(0, 5);
   };
 
-  const searchCars = async (query) => {
+  const searchCars = (query) => {
     if (!query || query.length < 2) return [];
-    return await storage.searchCars(query);
+    
+    const cars = [...new Set(
+      orders
+        .map(o => o.car)
+        .filter(c => c && c.toLowerCase().includes(query.toLowerCase()))
+    )];
+    
+    return cars.slice(0, 5);
   };
 
   // ==================== ЭКСПОРТ/ИМПОРТ ====================
@@ -229,13 +253,21 @@ export const AppStoreProvider = ({ children }) => {
 
   // ==================== ТЕМА ====================
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const toggleTheme = async () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    // ИСПРАВЛЕНИЕ БАГ 12: Сохранение темы в AsyncStorage
+    try {
+      await AsyncStorage.setItem('@theme', newTheme);
+    } catch (error) {
+      console.error('Failed to save theme:', error);
+    }
   };
 
   // ==================== КОНТЕКСТ ====================
 
-  const value = {
+  // ИСПРАВЛЕНИЕ БАГ 13: Мемоизация value для предотвращения лишних рендеров
+  const value = useMemo(() => ({
     // Состояние
     orders,
     debts,
@@ -265,7 +297,29 @@ export const AppStoreProvider = ({ children }) => {
     importData,
     
     toggleTheme,
-  };
+  }), [
+    orders, 
+    debts, 
+    stats, 
+    loading, 
+    theme,
+    refreshAll,
+    refreshOrders,
+    refreshDebts,
+    refreshStats,
+    addOrder,
+    updateOrder,
+    removeOrder,
+    undoRemove,
+    getOrderById,
+    searchByDateRange,
+    closeDebtAction,
+    searchClients,
+    searchCars,
+    exportData,
+    importData,
+    toggleTheme,
+  ]);
 
   return (
     <AppStoreContext.Provider value={value}>

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   Text,
-  KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
-import { TextInput, Button, RadioButton } from 'react-native-paper';
+import { TextInput, Button, RadioButton, HelperText } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../store/AppStore';
@@ -43,32 +43,75 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [showCarSuggestions, setShowCarSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
-  // Подсказки клиентов
+  // ИСПРАВЛЕНИЕ БАГ 5: Refs для очистки таймаутов
+  const clientTimerRef = useRef(null);
+  const carTimerRef = useRef(null);
+  const blurTimerRef = useRef(null);
+
+  // ИСПРАВЛЕНИЕ БАГ 5: Debounced подсказки клиентов с правильными зависимостями
   useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (client.length >= 2) {
-        const results = await searchClients(client);
-        setClientSuggestions(results);
-      } else {
-        setClientSuggestions([]);
+    if (clientTimerRef.current) {
+      clearTimeout(clientTimerRef.current);
+    }
+
+    if (client.length >= 2) {
+      clientTimerRef.current = setTimeout(() => {
+        try {
+          const results = searchClients(client); // Теперь синхронная функция
+          setClientSuggestions(results);
+        } catch (error) {
+          console.error('Search clients error:', error);
+          setClientSuggestions([]);
+        }
+      }, 300); // debounce 300ms
+    } else {
+      setClientSuggestions([]);
+    }
+
+    return () => {
+      if (clientTimerRef.current) {
+        clearTimeout(clientTimerRef.current);
       }
     };
-    fetchSuggestions();
-  }, [client]);
+  }, [client, searchClients]);
 
-  // Подсказки авто
+  // ИСПРАВЛЕНИЕ БАГ 5: Debounced подсказки авто с правильными зависимостями
   useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (car.length >= 2) {
-        const results = await searchCars(car);
-        setCarSuggestions(results);
-      } else {
-        setCarSuggestions([]);
+    if (carTimerRef.current) {
+      clearTimeout(carTimerRef.current);
+    }
+
+    if (car.length >= 2) {
+      carTimerRef.current = setTimeout(() => {
+        try {
+          const results = searchCars(car); // Теперь синхронная функция
+          setCarSuggestions(results);
+        } catch (error) {
+          console.error('Search cars error:', error);
+          setCarSuggestions([]);
+        }
+      }, 300); // debounce 300ms
+    } else {
+      setCarSuggestions([]);
+    }
+
+    return () => {
+      if (carTimerRef.current) {
+        clearTimeout(carTimerRef.current);
       }
     };
-    fetchSuggestions();
-  }, [car]);
+  }, [car, searchCars]);
+
+  // Очистка всех таймеров при размонтировании
+  useEffect(() => {
+    return () => {
+      if (clientTimerRef.current) clearTimeout(clientTimerRef.current);
+      if (carTimerRef.current) clearTimeout(carTimerRef.current);
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   const selectQuickJob = (jobItem) => {
     setJob(jobItem.name);
@@ -76,7 +119,10 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  // ИСПРАВЛЕНИЕ БАГ 6: Обработка ошибок валидации с UI feedback
   const handleSubmit = async () => {
+    setValidationError(''); // Сбрасываем предыдущую ошибку
+
     const orderData = {
       date: initialOrder?.date || new Date().toISOString().split('T')[0],
       client: client.trim(),
@@ -93,21 +139,34 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
 
     // Валидация
     if (!orderData.client) {
-      return { isValid: false, error: 'Укажите клиента' };
+      const error = 'Укажите клиента';
+      setValidationError(error);
+      Alert.alert('Ошибка', error);
+      return { isValid: false, error };
     }
     if (!orderData.job) {
-      return { isValid: false, error: 'Укажите работу' };
+      const error = 'Укажите работу';
+      setValidationError(error);
+      Alert.alert('Ошибка', error);
+      return { isValid: false, error };
     }
     if (orderData.workAmount <= 0 && orderData.ourPartsAmount <= 0) {
-      return { isValid: false, error: 'Укажите сумму работы или деталей' };
+      const error = 'Укажите сумму работы или деталей';
+      setValidationError(error);
+      Alert.alert('Ошибка', error);
+      return { isValid: false, error };
     }
 
     setSaving(true);
     try {
       await onSubmit(orderData);
+      setValidationError('');
       return { isValid: true };
     } catch (error) {
-      return { isValid: false, error: error.message };
+      const errorMsg = error.message || 'Не удалось сохранить заказ';
+      setValidationError(errorMsg);
+      Alert.alert('Ошибка', errorMsg);
+      return { isValid: false, error: errorMsg };
     } finally {
       setSaving(false);
     }
@@ -124,7 +183,10 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
             value={client}
             onChangeText={setClient}
             onFocus={() => setShowClientSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+            onBlur={() => {
+              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+              blurTimerRef.current = setTimeout(() => setShowClientSuggestions(false), 200);
+            }}
             style={[styles.input, { backgroundColor: theme.surface }]}
             mode="outlined"
             outlineColor={theme.border}
@@ -132,6 +194,11 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
             textColor={theme.text}
             theme={{ colors: { placeholder: theme.textTertiary } }}
           />
+          {validationError && !client && (
+            <HelperText type="error" visible={true}>
+              {validationError}
+            </HelperText>
+          )}
           {showClientSuggestions && clientSuggestions.length > 0 && (
             <View style={[styles.suggestions, { backgroundColor: theme.surface }]}>
               {clientSuggestions.map((suggestion, index) => (
@@ -161,7 +228,10 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
             value={car}
             onChangeText={setCar}
             onFocus={() => setShowCarSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowCarSuggestions(false), 200)}
+            onBlur={() => {
+              if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+              blurTimerRef.current = setTimeout(() => setShowCarSuggestions(false), 200);
+            }}
             style={[styles.input, { backgroundColor: theme.surface }]}
             mode="outlined"
             outlineColor={theme.border}
