@@ -9,7 +9,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0B0E11"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.masterjournal.app"

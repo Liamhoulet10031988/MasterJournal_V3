@@ -1,20 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../store/AppStore';
-import { formatAmount, formatDateToStore } from '../utils/formatters';
-import {
-  darkTheme,
-  lightTheme,
-  spacing,
-  borderRadius,
-  fontSize,
-  fontWeight,
-  getPayTypeColor,
-} from '../utils/theme';
+import { formatAmount } from '../utils/formatters';
+import { darkTheme, lightTheme, spacing, borderRadius, fontSize, fontWeight, getPayTypeColor } from '../utils/theme';
 
 const PERIODS = [
   { label: 'Неделя', days: 7 },
@@ -29,22 +27,21 @@ export default function StatsScreen() {
 
   const [selectedPeriod, setSelectedPeriod] = useState(1); // Месяц по умолчанию
 
-  // БАГ 8: useCallback с правильными зависимостями
-  const loadStats = useCallback(async () => {
+  useEffect(() => {
+    loadStats();
+  }, [selectedPeriod]);
+
+  const loadStats = async () => {
     const days = PERIODS[selectedPeriod].days;
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const start = formatDateToStore(startDate); // БАГ 8: без UTC смещения
-    const end = formatDateToStore(endDate); // БАГ 8: без UTC смещения
+    const start = startDate.toISOString().split('T')[0];
+    const end = endDate.toISOString().split('T')[0];
 
     await refreshStats(start, end);
-  }, [selectedPeriod, refreshStats]);
-
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]); // БАГ 8: loadStats в зависимостях
+  };
 
   const selectPeriod = (index) => {
     setSelectedPeriod(index);
@@ -82,7 +79,10 @@ export default function StatsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Заголовок */}
         <View style={styles.header}>
           <Ionicons name="stats-chart" size={28} color={theme.primary} />
@@ -143,14 +143,18 @@ export default function StatsScreen() {
         </Card>
 
         {/* Разбивка по работе и деталям */}
-        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>По видам работ:</Text>
+        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+          По видам работ:
+        </Text>
 
         <Card style={[styles.breakdownCard, { backgroundColor: theme.surface }]}>
           <Card.Content>
             <View style={styles.breakdownRow}>
               <View style={styles.breakdownLeft}>
                 <Ionicons name="construct" size={24} color={theme.primary} />
-                <Text style={[styles.breakdownLabel, { color: theme.text }]}>Работа</Text>
+                <Text style={[styles.breakdownLabel, { color: theme.text }]}>
+                  Работа
+                </Text>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={[styles.breakdownAmount, { color: theme.primary }]}>
@@ -180,7 +184,9 @@ export default function StatsScreen() {
             <View style={styles.breakdownRow}>
               <View style={styles.breakdownLeft}>
                 <Ionicons name="settings" size={24} color={theme.cashless} />
-                <Text style={[styles.breakdownLabel, { color: theme.text }]}>Наши детали</Text>
+                <Text style={[styles.breakdownLabel, { color: theme.text }]}>
+                  Наши детали
+                </Text>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={[styles.breakdownAmount, { color: theme.cashless }]}>
@@ -206,7 +212,9 @@ export default function StatsScreen() {
         </Card>
 
         {/* Разбивка по типам оплаты */}
-        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>По типам оплаты:</Text>
+        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+          По типам оплаты:
+        </Text>
 
         {stats.byType && stats.byType.length > 0 ? (
           stats.byType.map((item, index) => (
@@ -241,31 +249,23 @@ export default function StatsScreen() {
 }
 
 // Компонент карточки типа оплаты
-const PayTypeCard = ({
-  payType,
-  amount,
-  workAmount,
-  partsAmount,
-  count,
-  percentage,
-  theme,
-  icon,
-  label,
-}) => {
+const PayTypeCard = ({ payType, amount, workAmount, partsAmount, count, percentage, theme, icon, label }) => {
   const color = getPayTypeColor(payType, theme);
 
   return (
     <Card style={[styles.payTypeCard, { backgroundColor: theme.surface }]}>
       <Card.Content>
         <View style={[styles.payTypeBar, { backgroundColor: color }]} />
-
+        
         <View style={styles.payTypeContent}>
           <View style={styles.payTypeHeader}>
             <View style={[styles.iconCircle, { backgroundColor: `${color}20` }]}>
               <Ionicons name={icon} size={24} color={color} />
             </View>
             <View style={styles.payTypeInfo}>
-              <Text style={[styles.payTypeLabel, { color: theme.text }]}>{label}</Text>
+              <Text style={[styles.payTypeLabel, { color: theme.text }]}>
+                {label}
+              </Text>
               <Text style={[styles.payTypeCount, { color: theme.textSecondary }]}>
                 {count} {count === 1 ? 'заказ' : 'заказов'}
               </Text>
@@ -273,7 +273,9 @@ const PayTypeCard = ({
           </View>
 
           <View style={styles.payTypeFooter}>
-            <Text style={[styles.payTypeAmount, { color }]}>{formatAmount(amount)}</Text>
+            <Text style={[styles.payTypeAmount, { color }]}>
+              {formatAmount(amount)}
+            </Text>
             <Text style={[styles.payTypePercentage, { color: theme.textSecondary }]}>
               {percentage.toFixed(1)}%
             </Text>

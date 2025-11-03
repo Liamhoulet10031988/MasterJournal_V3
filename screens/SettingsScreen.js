@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, Text, Alert, Share, Platform } from 'react-native';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  Alert,
+  Share,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { List, Switch, Button, Divider, Dialog, Portal, TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -120,32 +128,14 @@ export default function SettingsScreen() {
       setExporting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      // БАГ 2: Проверка платформы - PDF не работает на web
-      if (Platform.OS === 'web') {
-        Alert.alert(
-          '❌ Недоступно',
-          'Экспорт в PDF не поддерживается на web. Используйте экспорт в Excel или CSV.',
-        );
-        return;
-      }
-
       const pdfUri = await exportData('pdf');
 
-      // БАГ 3: Проверка доступности Sharing
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(pdfUri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Экспорт отчёта (PDF)',
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        // Fallback: показываем путь к файлу
-        Alert.alert(
-          '✅ PDF создан',
-          `Файл сохранён:\n${pdfUri}\n\nОткройте файловый менеджер для доступа к файлу.`,
-        );
-      }
+      // Шарим файл через expo-sharing
+      await Sharing.shareAsync(pdfUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Экспорт отчёта (PDF)',
+        UTI: 'com.adobe.pdf'
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('✅ Успех', 'PDF отчёт создан!');
@@ -170,8 +160,8 @@ export default function SettingsScreen() {
 
       if (Platform.OS === 'web') {
         // Web - создаем Blob и скачиваем
-        const blob = new Blob([Uint8Array.from(atob(xlsxData), (c) => c.charCodeAt(0))], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        const blob = new Blob([Uint8Array.from(atob(xlsxData), c => c.charCodeAt(0))], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -192,12 +182,6 @@ export default function SettingsScreen() {
             mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             dialogTitle: 'Экспорт заказов (Excel)',
           });
-        } else {
-          // БАГ 3: Fallback - показываем путь к файлу
-          Alert.alert(
-            '✅ Excel создан',
-            `Файл сохранён:\n${fileUri}\n\nОткройте файловый менеджер для доступа к файлу.`,
-          );
         }
       }
 
@@ -244,12 +228,6 @@ export default function SettingsScreen() {
             mimeType: 'text/csv',
             dialogTitle: 'Экспорт заказов',
           });
-        } else {
-          // БАГ 3: Fallback - показываем путь к файлу
-          Alert.alert(
-            '✅ CSV создан',
-            `Файл сохранён:\n${ordersUri}\n\nОткройте файловый менеджер для доступа к файлу.`,
-          );
         }
       }
 
@@ -300,13 +278,14 @@ export default function SettingsScreen() {
   const performImport = async (jsonString) => {
     try {
       const result = await importData(jsonString);
+      await refreshAll();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         '✅ Успех',
-        `Импортировано:\n• Заказов: ${result.importedOrders}\n• Долгов: ${result.importedDebts}`,
+        `Импортировано:\n• Заказов: ${result.importedOrders}\n• Долгов: ${result.importedDebts}`
       );
-
+      
       setImportDialogVisible(false);
       setImportText('');
     } catch (error) {
@@ -320,7 +299,7 @@ export default function SettingsScreen() {
   // Очистка всех данных
   const handleClearData = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-
+    
     Alert.alert(
       '⚠️ Внимание!',
       'Вы уверены что хотите удалить ВСЕ данные?\n\nЭто действие нельзя отменить!\n\nРекомендуем сначала сделать экспорт.',
@@ -334,7 +313,7 @@ export default function SettingsScreen() {
               const { clearAllData } = await import('../lib/storage');
               await clearAllData();
               await refreshAll();
-
+              
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert('✅ Успех', 'Все данные удалены!');
             } catch (error) {
@@ -342,7 +321,7 @@ export default function SettingsScreen() {
             }
           },
         },
-      ],
+      ]
     );
   };
 
@@ -354,7 +333,10 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Заголовок */}
         <View style={styles.header}>
           <Ionicons name="settings" size={28} color={theme.primary} />
@@ -368,9 +350,7 @@ export default function SettingsScreen() {
           </List.Subheader>
           <List.Item
             title="Режим для шефа"
-            description={
-              themeMode === 'dark' ? 'Тёмная тема (CYBER-GARAGE)' : 'Светлая тема (CLEAN BUSINESS)'
-            }
+            description={themeMode === 'dark' ? 'Тёмная тема (CYBER-GARAGE)' : 'Светлая тема (CLEAN BUSINESS)'}
             titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
             descriptionStyle={{ color: theme.textSecondary }}
             left={(props) => (
@@ -398,7 +378,7 @@ export default function SettingsScreen() {
           <List.Subheader style={{ color: theme.textSecondary, fontSize: fontSize.md }}>
             Экспорт данных
           </List.Subheader>
-
+          
           <List.Item
             title="📄 Экспорт в PDF"
             description="Красивая таблица с рамками и форматированием"
@@ -408,12 +388,9 @@ export default function SettingsScreen() {
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportPDF}
             disabled={exporting}
-            style={[
-              styles.listItem,
-              { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#D32F2F' },
-            ]}
+            style={[styles.listItem, { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#D32F2F' }]}
           />
-
+          
           <List.Item
             title="📊 Экспорт в Excel (XLSX)"
             description="Таблица с форматированием и рамками"
@@ -423,12 +400,9 @@ export default function SettingsScreen() {
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportXLSX}
             disabled={exporting}
-            style={[
-              styles.listItem,
-              { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#217346' },
-            ]}
+            style={[styles.listItem, { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#217346' }]}
           />
-
+          
           <List.Item
             title="Экспорт в JSON"
             description="Полная копия всех данных"
@@ -473,16 +447,14 @@ export default function SettingsScreen() {
           <List.Subheader style={{ color: theme.textSecondary, fontSize: fontSize.md }}>
             Импорт данных
           </List.Subheader>
-
+          
           <List.Item
             title="Импорт из JSON"
             description="Восстановление или слияние данных"
             titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
             descriptionStyle={{ color: theme.textSecondary }}
             left={(props) => <List.Icon {...props} icon="upload" color={theme.primary} />}
-            right={(props) => (
-              <List.Icon {...props} icon="chevron-right" color={theme.textTertiary} />
-            )}
+            right={(props) => <List.Icon {...props} icon="chevron-right" color={theme.textTertiary} />}
             onPress={handleImportJSON}
             disabled={importing}
             style={[styles.listItem, { backgroundColor: theme.surface }]}
@@ -496,7 +468,7 @@ export default function SettingsScreen() {
           <List.Subheader style={{ color: theme.error, fontSize: fontSize.md }}>
             Опасная зона
           </List.Subheader>
-
+          
           <List.Item
             title="Очистить все данные"
             description="Удалить все заказы и долги"
@@ -513,7 +485,9 @@ export default function SettingsScreen() {
 
         {/* О приложении */}
         <View style={styles.about}>
-          <Text style={[styles.aboutTitle, { color: theme.text }]}>Master Journal v2.0</Text>
+          <Text style={[styles.aboutTitle, { color: theme.text }]}>
+            Master Journal v2.0
+          </Text>
           <Text style={[styles.aboutText, { color: theme.textSecondary }]}>
             CYBER-GARAGE Edition 💎
           </Text>

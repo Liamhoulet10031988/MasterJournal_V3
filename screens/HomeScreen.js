@@ -14,7 +14,7 @@ export default function HomeScreen() {
   const handleSave = async (orderData) => {
     try {
       await addOrder(orderData);
-
+      
       // Успех - хаптика и уведомление
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('✅ Успех', 'Заказ сохранён!');
@@ -33,7 +33,10 @@ export default function HomeScreen() {
         <Text style={[styles.title, { color: theme.text }]}>Быстрый заказ</Text>
       </View>
 
-      <OrderForm onSubmit={handleSave} submitLabel="Сохранить заказ" />
+      <OrderForm 
+        onSubmit={handleSave}
+        submitLabel="Сохранить заказ"
+      />
     </SafeAreaView>
   );
 }

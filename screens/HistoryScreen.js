@@ -20,39 +20,22 @@ import { OrderForm } from '../components/OrderForm';
 import { formatAmount, getPayTypeText } from '../utils/formatters';
 import { darkTheme, lightTheme, spacing, borderRadius, fontSize } from '../utils/theme';
 
-// БАГ 14: Конфигурация локали для календаря (выполняется один раз при импорте модуля)
+// Конфигурация локали для календаря
 LocaleConfig.locales['ru'] = {
   monthNames: [
-    'Январь',
-    'Февраль',
-    'Март',
-    'Апрель',
-    'Май',
-    'Июнь',
-    'Июль',
-    'Август',
-    'Сентябрь',
-    'Октябрь',
-    'Ноябрь',
-    'Декабрь',
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ],
   monthNamesShort: [
-    'Янв',
-    'Фев',
-    'Мар',
-    'Апр',
-    'Май',
-    'Июн',
-    'Июл',
-    'Авг',
-    'Сен',
-    'Окт',
-    'Ноя',
-    'Дек',
+    'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+    'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'
   ],
-  dayNames: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+  dayNames: [
+    'Воскресенье', 'Понедельник', 'Вторник', 'Среда',
+    'Четверг', 'Пятница', 'Суббота'
+  ],
   dayNamesShort: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
-  today: 'Сегодня',
+  today: 'Сегодня'
 };
 LocaleConfig.defaultLocale = 'ru';
 
@@ -66,7 +49,7 @@ export default function HistoryScreen() {
     searchByDateRange,
     theme: themeMode,
   } = useAppStore();
-
+  
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'calendar'
@@ -77,62 +60,29 @@ export default function HistoryScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [dateFilterModalVisible, setDateFilterModalVisible] = useState(false);
-
+  
   // Фильтрация по датам
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDateFiltered, setIsDateFiltered] = useState(false);
-
+  
   // Календарь
   const [selectedDate, setSelectedDate] = useState('');
   const [markedDates, setMarkedDates] = useState({});
-
+  
   // Undo состояние
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [currentSnapshotId, setCurrentSnapshotId] = useState(null);
 
-  // БАГ 11: Разделение на вычисление фильтров и обновление состояния
-  const applyFilters = useCallback(() => {
-    let filtered = orders;
-
-    // Фильтрация по датам
-    if (isDateFiltered && startDate && endDate) {
-      filtered = filtered.filter((order) => order.date >= startDate && order.date <= endDate);
-    }
-
-    // Фильтрация по тексту
-    if (searchQuery.trim()) {
-      const lowercaseQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter((order) => {
-        // БАГ 4: Безопасная проверка с защитой от null/undefined
-        const client = (order.client || '').toLowerCase();
-        const car = (order.car || '').toLowerCase();
-        const job = (order.job || '').toLowerCase();
-
-        return (
-          client.includes(lowercaseQuery) ||
-          car.includes(lowercaseQuery) ||
-          job.includes(lowercaseQuery)
-        );
-      });
-    }
-
-    // Фильтрация по выбранной дате в календаре
-    if (viewMode === 'calendar' && selectedDate) {
-      filtered = filtered.filter((order) => order.date === selectedDate);
-    }
-
-    setFilteredOrders(filtered);
+  useEffect(() => {
+    handleSearch(searchQuery);
+    updateMarkedDates();
   }, [orders, searchQuery, isDateFiltered, startDate, endDate, selectedDate, viewMode]);
 
-  useEffect(() => {
-    applyFilters();
-  }, [applyFilters]);
-
-  const updateMarkedDates = useCallback(() => {
+  const updateMarkedDates = () => {
     const marked = {};
-
-    filteredOrders.forEach((order) => {
+    
+    orders.forEach(order => {
       if (!marked[order.date]) {
         marked[order.date] = {
           marked: true,
@@ -140,7 +90,7 @@ export default function HistoryScreen() {
         };
       }
     });
-
+    
     // Добавляем выбранную дату
     if (selectedDate && marked[selectedDate]) {
       marked[selectedDate] = {
@@ -154,28 +104,65 @@ export default function HistoryScreen() {
         selectedColor: theme.primary,
       };
     }
-
+    
     setMarkedDates(marked);
-  }, [filteredOrders, selectedDate, theme]);
+  };
 
   useEffect(() => {
     updateMarkedDates();
-  }, [updateMarkedDates]);
+  }, [selectedDate, orders]);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    
+    let filtered = orders;
+    
+    // Фильтрация по датам
+    if (isDateFiltered && startDate && endDate) {
+      filtered = filtered.filter(order => 
+        order.date >= startDate && order.date <= endDate
+      );
+    }
+    
+    // Фильтрация по тексту
+    if (query.trim()) {
+      const lowercaseQuery = query.toLowerCase();
+      filtered = filtered.filter(
+        (order) => {
+          // Защита от null/undefined
+          const client = (order.client || '').toLowerCase();
+          const car = (order.car || '').toLowerCase();
+          const job = (order.job || '').toLowerCase();
+          
+          return client.includes(lowercaseQuery) ||
+                 car.includes(lowercaseQuery) ||
+                 job.includes(lowercaseQuery);
+        }
+      );
+    }
+    
+    // Фильтрация по выбранной дате в календаре
+    if (viewMode === 'calendar' && selectedDate) {
+      filtered = filtered.filter(order => order.date === selectedDate);
+    }
+    
+    setFilteredOrders(filtered);
+  };
 
   const applyDateFilter = async () => {
     if (!startDate || !endDate) {
       Alert.alert('Ошибка', 'Укажите начальную и конечную дату');
       return;
     }
-
+    
     if (startDate > endDate) {
       Alert.alert('Ошибка', 'Начальная дата не может быть позже конечной');
       return;
     }
-
+    
     setIsDateFiltered(true);
     setDateFilterModalVisible(false);
-    // БАГ 11: applyFilters сработает автоматически через useEffect
+    handleSearch(searchQuery);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -184,14 +171,14 @@ export default function HistoryScreen() {
     setEndDate('');
     setIsDateFiltered(false);
     setDateFilterModalVisible(false);
-    // БАГ 11: applyFilters сработает автоматически через useEffect
+    handleSearch(searchQuery);
   };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshOrders();
     setRefreshing(false);
-  }, [refreshOrders]);
+  }, []);
 
   const showOrderDetails = (order) => {
     setSelectedOrder(order);
@@ -221,7 +208,7 @@ export default function HistoryScreen() {
 
   const handleDeleteOrder = (order) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-
+    
     Alert.alert(
       '🗑️ Удалить заказ?',
       `Дата: ${order.date}\nКлиент: ${order.client}\nСумма: ${formatAmount(order.totalAmount || order.amount)}\n\nЭто действие можно будет отменить в течение 5 минут.`,
@@ -237,11 +224,11 @@ export default function HistoryScreen() {
             try {
               const deleteLinkedDebt = order.payType === 'debt';
               const result = await removeOrder(order.id, deleteLinkedDebt);
-
+              
               setModalVisible(false);
               setCurrentSnapshotId(result.snapshotId);
               setSnackbarVisible(true);
-
+              
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } catch (error) {
               Alert.alert('❌ Ошибка', error.message || 'Не удалось удалить заказ');
@@ -249,7 +236,7 @@ export default function HistoryScreen() {
             }
           },
         },
-      ],
+      ]
     );
   };
 
@@ -272,7 +259,7 @@ export default function HistoryScreen() {
   };
 
   const toggleViewMode = () => {
-    setViewMode((prev) => (prev === 'list' ? 'calendar' : 'list'));
+    setViewMode(prev => prev === 'list' ? 'calendar' : 'list');
     setSelectedDate('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
@@ -292,7 +279,11 @@ export default function HistoryScreen() {
   );
 
   const renderItem = ({ item }) => (
-    <OrderCard order={item} theme={theme} onPress={() => showOrderDetails(item)} />
+    <OrderCard
+      order={item}
+      theme={theme}
+      onPress={() => showOrderDetails(item)}
+    />
   );
 
   const calendarTheme = {
@@ -319,29 +310,29 @@ export default function HistoryScreen() {
             <Ionicons name="list" size={28} color={theme.primary} />
             <Text style={[styles.title, { color: theme.text }]}>История</Text>
           </View>
-
+          
           <View style={styles.headerRight}>
             {/* Кнопка фильтра по датам */}
             <TouchableOpacity
               onPress={() => setDateFilterModalVisible(true)}
-              style={[
-                styles.iconButton,
-                isDateFiltered && { backgroundColor: theme.primary + '20' },
-              ]}
+              style={[styles.iconButton, isDateFiltered && { backgroundColor: theme.primary + '20' }]}
             >
-              <Ionicons
-                name="calendar-outline"
-                size={24}
-                color={isDateFiltered ? theme.primary : theme.textSecondary}
+              <Ionicons 
+                name="calendar-outline" 
+                size={24} 
+                color={isDateFiltered ? theme.primary : theme.textSecondary} 
               />
             </TouchableOpacity>
-
+            
             {/* Переключатель вида */}
-            <TouchableOpacity onPress={toggleViewMode} style={styles.iconButton}>
-              <Ionicons
-                name={viewMode === 'list' ? 'calendar' : 'list'}
-                size={24}
-                color={theme.textSecondary}
+            <TouchableOpacity
+              onPress={toggleViewMode}
+              style={styles.iconButton}
+            >
+              <Ionicons 
+                name={viewMode === 'list' ? 'calendar' : 'list'} 
+                size={24} 
+                color={theme.textSecondary} 
               />
             </TouchableOpacity>
           </View>
@@ -350,7 +341,7 @@ export default function HistoryScreen() {
         {/* Поиск */}
         <Searchbar
           placeholder="Поиск по клиенту, авто, работе..."
-          onChangeText={setSearchQuery}
+          onChangeText={handleSearch}
           value={searchQuery}
           style={[styles.searchBar, { backgroundColor: theme.surface }]}
           inputStyle={[styles.searchInput, { color: theme.text }]}
@@ -394,22 +385,24 @@ export default function HistoryScreen() {
         )}
 
         {/* Список заказов */}
-        <FlatList
-          data={filteredOrders}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          ListEmptyComponent={renderEmpty}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.primary}
-              colors={[theme.primary]}
-            />
-          }
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            data={filteredOrders}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            ListEmptyComponent={renderEmpty}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.primary}
+                colors={[theme.primary]}
+              />
+            }
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
 
         {/* Модальное окно деталей */}
         <Portal>
@@ -421,9 +414,14 @@ export default function HistoryScreen() {
             {selectedOrder && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.primary }]}>Детали заказа</Text>
+                  <Text style={[styles.modalTitle, { color: theme.primary }]}>
+                    Детали заказа
+                  </Text>
                   <View style={styles.modalActions}>
-                    <TouchableOpacity onPress={handleEditOrder} style={styles.modalActionButton}>
+                    <TouchableOpacity 
+                      onPress={handleEditOrder}
+                      style={styles.modalActionButton}
+                    >
                       <Ionicons name="create-outline" size={24} color={theme.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteOrder(selectedOrder)}>
@@ -431,7 +429,7 @@ export default function HistoryScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-
+                
                 <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
 
                 <View style={styles.detailRow}>
@@ -467,9 +465,7 @@ export default function HistoryScreen() {
                 <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
 
                 <View style={styles.detailRow}>
-                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-                    Сумма работы:
-                  </Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Сумма работы:</Text>
                   <Text style={[styles.detailValue, { color: theme.primary }]}>
                     {formatAmount(selectedOrder.workAmount || 0)}
                   </Text>
@@ -477,20 +473,16 @@ export default function HistoryScreen() {
 
                 {selectedOrder.ourParts && (
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-                      Детали наши:
-                    </Text>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Детали наши:</Text>
                     <Text style={[styles.detailValue, { color: theme.text }]}>
                       {selectedOrder.ourParts}
                     </Text>
                   </View>
                 )}
 
-                {selectedOrder.ourPartsAmount > 0 && (
+                {(selectedOrder.ourPartsAmount > 0) && (
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-                      Сумма деталей наших:
-                    </Text>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Сумма деталей наших:</Text>
                     <Text style={[styles.detailValue, { color: theme.primary }]}>
                       {formatAmount(selectedOrder.ourPartsAmount || 0)}
                     </Text>
@@ -499,9 +491,7 @@ export default function HistoryScreen() {
 
                 {selectedOrder.clientParts && (
                   <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
-                      Детали клиента:
-                    </Text>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Детали клиента:</Text>
                     <Text style={[styles.detailValue, { color: theme.text }]}>
                       {selectedOrder.clientParts}
                     </Text>
@@ -511,9 +501,7 @@ export default function HistoryScreen() {
                 <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
 
                 <View style={styles.detailRow}>
-                  <Text
-                    style={[styles.detailLabel, styles.totalLabel, { color: theme.textSecondary }]}
-                  >
+                  <Text style={[styles.detailLabel, styles.totalLabel, { color: theme.textSecondary }]}>
                     Итого:
                   </Text>
                   <Text style={[styles.detailValue, styles.amountText, { color: theme.primary }]}>
@@ -564,14 +552,13 @@ export default function HistoryScreen() {
           <Modal
             visible={editModalVisible}
             onDismiss={() => setEditModalVisible(false)}
-            contentContainerStyle={[
-              styles.modalContent,
-              styles.editModal,
-              { backgroundColor: theme.surface },
-            ]}
+            contentContainerStyle={[styles.modalContent, styles.editModal, { backgroundColor: theme.surface }]}
           >
             {selectedOrder && (
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView 
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.primary }]}>
                     Редактирование заказа
@@ -595,7 +582,9 @@ export default function HistoryScreen() {
             contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
           >
             <View>
-              <Text style={[styles.modalTitle, { color: theme.primary }]}>Фильтр по датам</Text>
+              <Text style={[styles.modalTitle, { color: theme.primary }]}>
+                Фильтр по датам
+              </Text>
               <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
 
               <TextInput

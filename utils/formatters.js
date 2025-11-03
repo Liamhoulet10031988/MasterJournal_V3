@@ -7,38 +7,11 @@ export const formatAmount = (amount) => {
 };
 
 /**
- * Приведение даты к формату хранения (YYYY-MM-DD) в локальном часовом поясе
- */
-export const formatDateToStore = (value = new Date()) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-};
-
-/**
- * Приведение произвольного значения к строке для безопасного поиска/отображения
- */
-export const normalizeString = (value) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  return String(value);
-};
-
-/**
  * Форматирование даты
  */
 export const formatDate = (dateString) => {
   if (!dateString) return '';
-
+  
   try {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
@@ -56,7 +29,7 @@ export const formatDate = (dateString) => {
  */
 export const formatDateTime = (isoString) => {
   if (!isoString) return '';
-
+  
   try {
     const date = new Date(isoString);
     return date.toLocaleString('ru-RU', {
@@ -109,11 +82,11 @@ export const getPayTypeShort = (payType) => {
 export const formatDateRange = (startDate, endDate) => {
   const start = formatDate(startDate);
   const end = formatDate(endDate);
-
+  
   if (start === end) {
     return start;
   }
-
+  
   return `${start} — ${end}`;
 };
 
@@ -122,17 +95,17 @@ export const formatDateRange = (startDate, endDate) => {
  */
 export const getRelativeDate = (dateString) => {
   if (!dateString) return '';
-
+  
   try {
     const date = new Date(dateString);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
+    
     const dateStr = date.toDateString();
     const todayStr = today.toDateString();
     const yesterdayStr = yesterday.toDateString();
-
+    
     if (dateStr === todayStr) {
       return 'Сегодня';
     } else if (dateStr === yesterdayStr) {

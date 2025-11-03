@@ -10,7 +10,7 @@ import { spacing, borderRadius, fontSize, fontWeight } from '../utils/theme';
  */
 export const OrderCard = ({ order, onPress, theme }) => {
   const payTypeColor = getPayTypeColor(order.payType, theme);
-
+  
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -30,7 +30,7 @@ export const OrderCard = ({ order, onPress, theme }) => {
           },
         ]}
       />
-
+      
       <View style={styles.content}>
         {/* Заголовок: клиент + дата */}
         <View style={styles.header}>
@@ -40,9 +40,11 @@ export const OrderCard = ({ order, onPress, theme }) => {
               {order.client}
             </Text>
           </View>
-          <Text style={[styles.date, { color: theme.textTertiary }]}>{order.date}</Text>
+          <Text style={[styles.date, { color: theme.textTertiary }]}>
+            {order.date}
+          </Text>
         </View>
-
+        
         {/* Авто */}
         {order.car && (
           <View style={styles.row}>
@@ -52,29 +54,33 @@ export const OrderCard = ({ order, onPress, theme }) => {
             </Text>
           </View>
         )}
-
+        
         {/* Работа */}
         <Text style={[styles.job, { color: theme.text }]} numberOfLines={2}>
           {order.job}
         </Text>
-
+        
         {/* Нижний ряд: доп. инфо + сумма */}
         <View style={styles.footer}>
           <View style={styles.tags}>
             {order.freonGrams && (
               <View style={[styles.tag, { backgroundColor: theme.surfaceHighlight }]}>
                 <Ionicons name="snow" size={12} color={theme.info} />
-                <Text style={[styles.tagText, { color: theme.info }]}>{order.freonGrams}г</Text>
+                <Text style={[styles.tagText, { color: theme.info }]}>
+                  {order.freonGrams}г
+                </Text>
               </View>
             )}
             {order.parts && (
               <View style={[styles.tag, { backgroundColor: theme.surfaceHighlight }]}>
                 <Ionicons name="build" size={12} color={theme.warning} />
-                <Text style={[styles.tagText, { color: theme.warning }]}>Детали</Text>
+                <Text style={[styles.tagText, { color: theme.warning }]}>
+                  Детали
+                </Text>
               </View>
             )}
           </View>
-
+          
           {/* Сумма с неоновым эффектом */}
           <View
             style={[
@@ -95,7 +101,7 @@ export const OrderCard = ({ order, onPress, theme }) => {
                 },
               ]}
             >
-              {formatAmount(order.totalAmount || order.amount)}
+              {formatAmount(order.amount)}
             </Text>
           </View>
         </View>
