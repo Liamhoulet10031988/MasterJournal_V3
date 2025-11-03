@@ -59,6 +59,7 @@ export default function HistoryScreen() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
   const [dateFilterModalVisible, setDateFilterModalVisible] = useState(false);
   
   // Фильтрация по датам
@@ -192,11 +193,13 @@ export default function HistoryScreen() {
     }
 
     setEditingOrder({ ...selectedOrder });
+    setEditModalVisible(true);
     setModalVisible(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const closeEditModal = () => {
+    setEditModalVisible(false);
     setEditingOrder(null);
   };
 
@@ -565,7 +568,7 @@ export default function HistoryScreen() {
 
           {/* Модальное окно редактирования */}
           <Modal
-            visible={!!editingOrder}
+            visible={editModalVisible}
             onDismiss={closeEditModal}
             contentContainerStyle={[styles.modalContent, styles.editModal, { backgroundColor: theme.surface }]}
           >
