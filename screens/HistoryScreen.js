@@ -59,6 +59,7 @@ export default function HistoryScreen() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [dateFilterModalVisible, setDateFilterModalVisible] = useState(false);
   
   // Фильтрация по датам
@@ -187,18 +188,32 @@ export default function HistoryScreen() {
   };
 
   const handleEditOrder = () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    setEditingOrder({ ...selectedOrder });
     setModalVisible(false);
     setEditModalVisible(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const closeEditModal = () => {
+    setEditModalVisible(false);
+    setEditingOrder(null);
+  };
+
   const handleUpdateOrder = async (orderData) => {
     try {
-      await updateOrder(selectedOrder.id, orderData);
+      if (!editingOrder) {
+        return;
+      }
+
+      const updatedOrder = await updateOrder(editingOrder.id, orderData);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('✅ Успех', 'Заказ обновлён!');
-      setEditModalVisible(false);
-      setSelectedOrder(null);
+      closeEditModal();
+      setSelectedOrder(updatedOrder);
     } catch (error) {
       Alert.alert('❌ Ошибка', error.message || 'Не удалось обновить заказ');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -553,16 +568,16 @@ export default function HistoryScreen() {
 
           {/* Модальное окно редактирования */}
           <Modal
-            visible={editModalVisible}
-            onDismiss={() => setEditModalVisible(false)}
+            visible={editModalVisible && !!editingOrder}
+            onDismiss={closeEditModal}
             contentContainerStyle={[styles.modalContent, styles.editModal, { backgroundColor: theme.surface }]}
           >
-            {selectedOrder && (
+            {editingOrder && (
               <View style={styles.editFormWrapper}>
                 <OrderForm
-                  initialOrder={selectedOrder}
+                  initialOrder={editingOrder}
                   onSubmit={handleUpdateOrder}
-                  onCancel={() => setEditModalVisible(false)}
+                  onCancel={closeEditModal}
                   submitLabel="Сохранить изменения"
                   headerContent={(
                     <>
