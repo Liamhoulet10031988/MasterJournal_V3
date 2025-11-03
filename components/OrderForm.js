@@ -121,10 +121,11 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={100}
     >
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ flexGrow: 1 }}
+        nestedScrollEnabled
       >
         <View style={styles.formContainer}>
           {/* Клиент */}

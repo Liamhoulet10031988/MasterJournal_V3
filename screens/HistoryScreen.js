@@ -412,7 +412,10 @@ export default function HistoryScreen() {
             contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
           >
             {selectedOrder && (
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.primary }]}>
                     Детали заказа
@@ -555,9 +558,10 @@ export default function HistoryScreen() {
             contentContainerStyle={[styles.modalContent, styles.editModal, { backgroundColor: theme.surface }]}
           >
             {selectedOrder && (
-              <ScrollView 
+              <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.primary }]}>
