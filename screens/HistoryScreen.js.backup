@@ -1,0 +1,399 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  Alert,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Searchbar, Snackbar, Portal, Modal, Button, Divider } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useAppStore } from '../store/AppStore';
+import { OrderCard } from '../components/OrderCard';
+import { formatAmount, getPayTypeText } from '../utils/formatters';
+import { darkTheme, lightTheme, spacing, borderRadius, fontSize } from '../utils/theme';
+
+export default function HistoryScreen() {
+  const {
+    orders,
+    refreshOrders,
+    removeOrder,
+    undoRemove,
+    theme: themeMode,
+  } = useAppStore();
+  
+  const theme = themeMode === 'dark' ? darkTheme : lightTheme;
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredOrders, setFilteredOrders] = useState(orders);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  
+  // Undo состояние
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [currentSnapshotId, setCurrentSnapshotId] = useState(null);
+
+  useEffect(() => {
+    handleSearch(searchQuery);
+  }, [orders, searchQuery]);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setFilteredOrders(orders);
+      return;
+    }
+
+    const lowercaseQuery = query.toLowerCase();
+    const filtered = orders.filter(
+      (order) =>
+        order.client.toLowerCase().includes(lowercaseQuery) ||
+        order.car.toLowerCase().includes(lowercaseQuery) ||
+        order.job.toLowerCase().includes(lowercaseQuery)
+    );
+    
+    setFilteredOrders(filtered);
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshOrders();
+    setRefreshing(false);
+  }, []);
+
+  const showOrderDetails = (order) => {
+    setSelectedOrder(order);
+    setModalVisible(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleDeleteOrder = (order) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    
+    Alert.alert(
+      '🗑️ Удалить заказ?',
+      `Дата: ${order.date}\nКлиент: ${order.client}\nСумма: ${formatAmount(order.amount)}\n\nЭто действие можно будет отменить в течение 5 минут.`,
+      [
+        {
+          text: 'Отмена',
+          style: 'cancel',
+        },
+        {
+          text: '🗑️ Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const deleteLinkedDebt = order.payType === 'debt';
+              const result = await removeOrder(order.id, deleteLinkedDebt);
+              
+              setModalVisible(false);
+              setCurrentSnapshotId(result.snapshotId);
+              setSnackbarVisible(true);
+              
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (error) {
+              Alert.alert('❌ Ошибка', error.message || 'Не удалось удалить заказ');
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUndo = async () => {
+    try {
+      await undoRemove(currentSnapshotId);
+      setSnackbarVisible(false);
+      setCurrentSnapshotId(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert('❌ Ошибка', 'Не удалось восстановить заказ');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const renderEmpty = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="document-text-outline" size={64} color={theme.textTertiary} />
+      <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+        {searchQuery ? 'Ничего не найдено' : 'Заказов пока нет'}
+      </Text>
+      {!searchQuery && (
+        <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
+          Создай первый заказ на вкладке "Заказ"
+        </Text>
+      )}
+    </View>
+  );
+
+  const renderItem = ({ item }) => (
+    <OrderCard
+      order={item}
+      theme={theme}
+      onPress={() => showOrderDetails(item)}
+    />
+  );
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <View style={styles.content}>
+        {/* Заголовок */}
+        <View style={styles.header}>
+          <Ionicons name="list" size={28} color={theme.primary} />
+          <Text style={[styles.title, { color: theme.text }]}>История</Text>
+        </View>
+
+        {/* Поиск */}
+        <Searchbar
+          placeholder="Поиск по клиенту, авто, работе..."
+          onChangeText={handleSearch}
+          value={searchQuery}
+          style={[styles.searchBar, { backgroundColor: theme.surface }]}
+          inputStyle={[styles.searchInput, { color: theme.text }]}
+          iconColor={theme.primary}
+          placeholderTextColor={theme.textTertiary}
+          theme={{ colors: { primary: theme.primary } }}
+        />
+
+        {/* Список заказов */}
+        <FlatList
+          data={filteredOrders}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+
+        {/* Модальное окно деталей */}
+        <Portal>
+          <Modal
+            visible={modalVisible}
+            onDismiss={() => setModalVisible(false)}
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
+          >
+            {selectedOrder && (
+              <View>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.primary }]}>
+                    Детали заказа
+                  </Text>
+                  <TouchableOpacity onPress={() => handleDeleteOrder(selectedOrder)}>
+                    <Ionicons name="trash-outline" size={24} color={theme.error} />
+                  </TouchableOpacity>
+                </View>
+                
+                <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
+
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Дата:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedOrder.date}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Клиент:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedOrder.client}
+                  </Text>
+                </View>
+
+                {selectedOrder.car && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Авто:</Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedOrder.car}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Работа:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedOrder.job}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Сумма:</Text>
+                  <Text style={[styles.detailValue, styles.amountText, { color: theme.primary }]}>
+                    {formatAmount(selectedOrder.amount)}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Оплата:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {getPayTypeText(selectedOrder.payType)}
+                  </Text>
+                </View>
+
+                {selectedOrder.parts && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Детали:</Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedOrder.parts}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedOrder.freonGrams && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Фреон:</Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedOrder.freonGrams} г
+                    </Text>
+                  </View>
+                )}
+
+                {selectedOrder.comment && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>
+                      Комментарий:
+                    </Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedOrder.comment}
+                    </Text>
+                  </View>
+                )}
+
+                <Button
+                  mode="outlined"
+                  onPress={() => setModalVisible(false)}
+                  style={styles.closeButton}
+                  textColor={theme.textSecondary}
+                >
+                  Закрыть
+                </Button>
+              </View>
+            )}
+          </Modal>
+        </Portal>
+
+        {/* Snackbar для Undo */}
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => {
+            setSnackbarVisible(false);
+            setCurrentSnapshotId(null);
+          }}
+          duration={5000}
+          action={{
+            label: 'Отменить',
+            onPress: handleUndo,
+          }}
+          style={{ backgroundColor: theme.surface }}
+          theme={{ colors: { surface: theme.surface, accent: theme.primary } }}
+        >
+          <Text style={{ color: theme.text }}>Заказ удалён</Text>
+        </Snackbar>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  searchBar: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    elevation: 0,
+    borderRadius: borderRadius.lg,
+  },
+  searchInput: {
+    fontSize: fontSize.md,
+  },
+  listContent: {
+    paddingBottom: 100,
+    flexGrow: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: fontSize.xl,
+    fontWeight: '600',
+    marginTop: spacing.lg,
+  },
+  emptySubtext: {
+    fontSize: fontSize.md,
+    marginTop: spacing.sm,
+  },
+  modalContent: {
+    margin: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: '700',
+  },
+  divider: {
+    marginBottom: spacing.lg,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  detailLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  detailValue: {
+    fontSize: fontSize.md,
+    flex: 1,
+    textAlign: 'right',
+  },
+  amountText: {
+    fontWeight: '700',
+    fontSize: fontSize.xl,
+  },
+  closeButton: {
+    marginTop: spacing.lg,
+  },
+});
