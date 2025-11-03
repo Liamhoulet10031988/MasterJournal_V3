@@ -558,24 +558,24 @@ export default function HistoryScreen() {
             contentContainerStyle={[styles.modalContent, styles.editModal, { backgroundColor: theme.surface }]}
           >
             {selectedOrder && (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled
-              >
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.primary }]}>
-                    Редактирование заказа
-                  </Text>
-                </View>
-                <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
+              <View style={styles.editFormWrapper}>
                 <OrderForm
                   initialOrder={selectedOrder}
                   onSubmit={handleUpdateOrder}
                   onCancel={() => setEditModalVisible(false)}
                   submitLabel="Сохранить изменения"
+                  headerContent={(
+                    <>
+                      <View style={styles.modalHeader}>
+                        <Text style={[styles.modalTitle, { color: theme.primary }]}>
+                          Редактирование заказа
+                        </Text>
+                      </View>
+                      <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
+                    </>
+                  )}
                 />
-              </ScrollView>
+              </View>
             )}
           </Modal>
 
@@ -766,6 +766,10 @@ const styles = StyleSheet.create({
   editModal: {
     maxHeight: '90%',
     padding: spacing.md,
+  },
+  editFormWrapper: {
+    flex: 1,
+    minHeight: 0,
   },
   modalHeader: {
     flexDirection: 'row',

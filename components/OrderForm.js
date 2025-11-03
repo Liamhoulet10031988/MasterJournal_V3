@@ -23,7 +23,14 @@ const QUICK_JOBS = [
   { name: 'Замена АКБ', price: 1200 },
 ];
 
-export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'Сохранить заказ' }) => {
+export const OrderForm = ({
+  initialOrder,
+  onSubmit,
+  onCancel,
+  submitLabel = 'Сохранить заказ',
+  headerContent = null,
+  contentStyle,
+}) => {
   const { searchClients, searchCars, theme: themeMode } = useAppStore();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
@@ -127,7 +134,8 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
         contentContainerStyle={{ flexGrow: 1 }}
         nestedScrollEnabled
       >
-        <View style={styles.formContainer}>
+        <View style={[styles.formContainer, contentStyle]}>
+          {headerContent}
           {/* Клиент */}
           <View style={styles.inputContainer}>
           <TextInput
