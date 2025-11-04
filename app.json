@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Master Journal",
+    "name": "Master Journals",
     "slug": "master-journal-v2",
     "version": "2.0.0",
     "orientation": "portrait",
@@ -21,6 +21,12 @@
         "backgroundColor": "#0B0E11"
       },
       "package": "com.masterjournal.app"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "07308ee3-b109-4fbb-b97c-d8ca4995a54a"
+      }
+    },
+    "owner": "liamhoulet"
   }
 }

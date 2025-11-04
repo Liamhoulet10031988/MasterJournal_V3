@@ -24,7 +24,7 @@ const QUICK_JOBS = [
   { name: 'Замена АКБ', price: 1200 },
 ];
 
-export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'Сохранить заказ' }) => {
+export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'Сохранить заказ', isModal = false }) => {
   const { searchClients, searchCars, theme: themeMode } = useAppStore();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
   const [client, setClient] = useState(initialOrder?.client || '');
@@ -190,18 +190,14 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
 
   const totalAmount = (parseInt(workAmount) || 0) + (parseInt(ourPartsAmount) || 0);
 
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={100}
+  const content = (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled={true}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} // 👈 Добавил paddingBottom
-      >
-        <View style={[styles.formContainer, { backgroundColor: theme.surface }]}>
+      <View style={[styles.formContainer, { backgroundColor: theme.surface }]}>
           {/* Клиент */}
           <View style={styles.inputContainer}>
             <TextInput
@@ -481,6 +477,15 @@ export const OrderForm = ({ initialOrder, onSubmit, onCancel, submitLabel = 'С�
           </View>
         </View>
       </ScrollView>
+  );
+
+  return isModal ? content : (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={100}
+    >
+      {content}
     </KeyboardAvoidingView>
   );
 };

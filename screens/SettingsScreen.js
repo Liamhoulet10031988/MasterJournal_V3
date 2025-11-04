@@ -7,9 +7,11 @@ import {
   Alert,
   Share,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { List, Switch, Button, Divider, Dialog, Portal, TextInput } from 'react-native-paper';
+import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
@@ -17,6 +19,15 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useAppStore } from '../store/AppStore';
 import { darkTheme, lightTheme, spacing, borderRadius, fontSize } from '../utils/theme';
+
+LocaleConfig.locales['ru'] = {
+  monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+  monthNamesShort: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
+  dayNames: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+  dayNamesShort: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+  today: 'Сегодня'
+};
+LocaleConfig.defaultLocale = 'ru';
 
 export default function SettingsScreen() {
   const { theme: themeMode, toggleTheme, exportData, importData, refreshAll } = useAppStore();
@@ -26,6 +37,15 @@ export default function SettingsScreen() {
   const [importText, setImportText] = useState('');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  
+  // PDF фильтр
+  const [pdfFilterVisible, setPdfFilterVisible] = useState(false);
+  const [pdfFilterMode, setPdfFilterMode] = useState('range'); // 'range' | 'specific'
+  const [pdfStartDate, setPdfStartDate] = useState('');
+  const [pdfEndDate, setPdfEndDate] = useState('');
+  const [pdfSelectedDates, setPdfSelectedDates] = useState({});
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   // Экспорт JSON
   const handleExportJSON = async () => {
@@ -148,54 +168,76 @@ export default function SettingsScreen() {
     }
   };
 
-  // Экспорт XLSX
-  const handleExportXLSX = async () => {
+  // Экспорт PDF с фильтрами
+  const handleExportPDFFiltered = async () => {
     try {
       setExporting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      const xlsxData = await exportData('xlsx');
-      const timestamp = new Date().toISOString().split('T')[0];
-      const fileName = `orders-${timestamp}.xlsx`;
-
-      if (Platform.OS === 'web') {
-        // Web - создаем Blob и скачиваем
-        const blob = new Blob([Uint8Array.from(atob(xlsxData), c => c.charCodeAt(0))], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        link.click();
-        URL.revokeObjectURL(url);
-      } else {
-        // Mobile - сохраняем и шарим
-        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, xlsxData, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            dialogTitle: 'Экспорт заказов (Excel)',
-          });
+      let filterOptions = {};
+      
+      if (pdfFilterMode === 'range') {
+        if (!pdfStartDate || !pdfEndDate) {
+          Alert.alert('Ошибка', 'Укажите начальную и конечную дату');
+          setExporting(false);
+          return;
         }
+        filterOptions = { startDate: pdfStartDate, endDate: pdfEndDate };
+      } else {
+        const selectedDatesArray = Object.keys(pdfSelectedDates).filter(date => pdfSelectedDates[date].selected);
+        if (selectedDatesArray.length === 0) {
+          Alert.alert('Ошибка', 'Выберите хотя бы одну дату');
+          setExporting(false);
+          return;
+        }
+        filterOptions = { dates: selectedDatesArray };
       }
 
+      const pdfUri = await exportData('pdf-filtered', filterOptions);
+      
+      await Sharing.shareAsync(pdfUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Экспорт отчёта (PDF)',
+        UTI: 'com.adobe.pdf'
+      });
+
+      setPdfFilterVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Успех', 'Отчёт Excel создан!');
+      Alert.alert('✅ Успех', 'PDF отчёт создан!');
     } catch (error) {
-      console.error('Export XLSX error:', error);
+      console.error('Export PDF filtered error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('❌ Ошибка', 'Не удалось создать Excel: ' + error.message);
+      Alert.alert('❌ Ошибка', error.message || 'Не удалось создать PDF');
     } finally {
       setExporting(false);
     }
   };
 
+  const handleDayPress = (day) => {
+    const dateString = day.dateString;
+    setPdfSelectedDates(prev => ({
+      ...prev,
+      [dateString]: {
+        selected: !prev[dateString]?.selected,
+        selectedColor: theme.primary,
+      }
+    }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleStartDateSelect = (day) => {
+    setPdfStartDate(day.dateString);
+    setShowStartCalendar(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleEndDateSelect = (day) => {
+    setPdfEndDate(day.dateString);
+    setShowEndCalendar(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Экспорт XLSX
   // Экспорт CSV
   const handleExportCSV = async () => {
     try {
@@ -349,10 +391,10 @@ export default function SettingsScreen() {
             Оформление
           </List.Subheader>
           <List.Item
-            title="Режим для шефа"
-            description={themeMode === 'dark' ? 'Тёмная тема (CYBER-GARAGE)' : 'Светлая тема (CLEAN BUSINESS)'}
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
-            descriptionStyle={{ color: theme.textSecondary }}
+            title="Тема оформления"
+            description={themeMode === 'dark' ? 'Тёмная тема' : 'Светлая тема'}
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
             left={(props) => (
               <List.Icon
                 {...props}
@@ -380,34 +422,37 @@ export default function SettingsScreen() {
           </List.Subheader>
           
           <List.Item
-            title="📄 Экспорт в PDF"
-            description="Красивая таблица с рамками и форматированием"
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg, fontWeight: '600' }}
-            descriptionStyle={{ color: theme.textSecondary }}
+            title="📄 Экспорт в PDF (полный)"
+            description="Все заказы в одном документе"
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
             left={(props) => <List.Icon {...props} icon="file-pdf-box" color="#D32F2F" />}
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportPDF}
             disabled={exporting}
-            style={[styles.listItem, { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#D32F2F' }]}
+            style={[styles.listItem, { backgroundColor: theme.surface }]}
           />
           
           <List.Item
-            title="📊 Экспорт в Excel (XLSX)"
-            description="Таблица с форматированием и рамками"
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg, fontWeight: '600' }}
-            descriptionStyle={{ color: theme.textSecondary }}
-            left={(props) => <List.Icon {...props} icon="file-excel" color="#217346" />}
-            right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
-            onPress={handleExportXLSX}
+            title="📄 Экспорт в PDF (фильтр)"
+            description="По выбранным датам или диапазону"
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
+            left={(props) => <List.Icon {...props} icon="calendar-range" color="#D32F2F" />}
+            right={(props) => <List.Icon {...props} icon="tune" color={theme.textTertiary} />}
+            onPress={() => {
+              setPdfFilterVisible(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
             disabled={exporting}
-            style={[styles.listItem, { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: '#217346' }]}
+            style={[styles.listItem, { backgroundColor: theme.surface }]}
           />
           
           <List.Item
             title="Экспорт в JSON"
             description="Полная копия всех данных"
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
-            descriptionStyle={{ color: theme.textSecondary }}
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
             left={(props) => <List.Icon {...props} icon="code-json" color={theme.info} />}
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportJSON}
@@ -418,8 +463,8 @@ export default function SettingsScreen() {
           <List.Item
             title="Экспорт в JSON (Русский)"
             description="JSON с русскими ключами"
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
-            descriptionStyle={{ color: theme.textSecondary }}
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
             left={(props) => <List.Icon {...props} icon="code-json" color={theme.primary} />}
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportJSONRussian}
@@ -430,8 +475,8 @@ export default function SettingsScreen() {
           <List.Item
             title="Экспорт в CSV"
             description="Таблицы для Excel/Google Sheets"
-            titleStyle={{ color: theme.text, fontSize: fontSize.lg }}
-            descriptionStyle={{ color: theme.textSecondary }}
+            titleStyle={{ color: theme.text, fontSize: fontSize.md }}
+            descriptionStyle={{ color: theme.textSecondary, fontSize: fontSize.sm }}
             left={(props) => <List.Icon {...props} icon="table" color={theme.success} />}
             right={(props) => <List.Icon {...props} icon="download" color={theme.textTertiary} />}
             onPress={handleExportCSV}
@@ -486,13 +531,7 @@ export default function SettingsScreen() {
         {/* О приложении */}
         <View style={styles.about}>
           <Text style={[styles.aboutTitle, { color: theme.text }]}>
-            Master Journal v2.0
-          </Text>
-          <Text style={[styles.aboutText, { color: theme.textSecondary }]}>
-            CYBER-GARAGE Edition 💎
-          </Text>
-          <Text style={[styles.aboutText, { color: theme.textTertiary, marginTop: spacing.sm }]}>
-            Made with ❤️ by Claude
+            Master Journal Aleshkin
           </Text>
         </View>
       </ScrollView>
@@ -545,6 +584,236 @@ export default function SettingsScreen() {
             </Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* Модалка PDF фильтра */}
+        <Dialog
+          visible={pdfFilterVisible}
+          onDismiss={() => {
+            setPdfFilterVisible(false);
+            setPdfStartDate('');
+            setPdfEndDate('');
+            setPdfSelectedDates({});
+            setShowStartCalendar(false);
+            setShowEndCalendar(false);
+          }}
+          style={{ backgroundColor: theme.surface, maxHeight: '90%' }}
+        >
+          <Dialog.Title style={{ color: theme.primary }}>
+            Фильтр для PDF экспорта
+          </Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: spacing.md }}
+            >
+              {/* Выбор режима */}
+              <View style={styles.pdfFilterModeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    {
+                      backgroundColor: pdfFilterMode === 'range' ? theme.primary : theme.background,
+                      borderColor: theme.primary,
+                    },
+                  ]}
+                  onPress={() => {
+                    setPdfFilterMode('range');
+                    setPdfSelectedDates({});
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      { color: pdfFilterMode === 'range' ? theme.background : theme.text },
+                    ]}
+                  >
+                    Диапазон дат
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.modeButton,
+                    {
+                      backgroundColor: pdfFilterMode === 'specific' ? theme.primary : theme.background,
+                      borderColor: theme.primary,
+                    },
+                  ]}
+                  onPress={() => {
+                    setPdfFilterMode('specific');
+                    setPdfStartDate('');
+                    setPdfEndDate('');
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      { color: pdfFilterMode === 'specific' ? theme.background : theme.text },
+                    ]}
+                  >
+                    Конкретные даты
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Диапазон дат */}
+              {pdfFilterMode === 'range' && (
+                <View>
+                  <View style={styles.datePickerContainer}>
+                    <Text style={[styles.dateLabel, { color: theme.text }]}>Начальная дата:</Text>
+                    <TouchableOpacity
+                      style={[styles.dateButton, { 
+                        backgroundColor: theme.background, 
+                        borderColor: showStartCalendar ? theme.primary : theme.border 
+                      }]}
+                      onPress={() => {
+                        setShowStartCalendar(!showStartCalendar);
+                        setShowEndCalendar(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      <Ionicons 
+                        name="calendar-outline" 
+                        size={20} 
+                        color={pdfStartDate ? theme.primary : theme.textSecondary} 
+                      />
+                      <Text style={[styles.dateButtonText, { 
+                        color: pdfStartDate ? theme.text : theme.textTertiary 
+                      }]}>
+                        {pdfStartDate || 'Выберите дату'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {showStartCalendar && (
+                      <View style={styles.calendarWrapper}>
+                        <Calendar
+                          current={pdfStartDate || new Date().toISOString().split('T')[0]}
+                          onDayPress={handleStartDateSelect}
+                          markedDates={{
+                            [pdfStartDate]: { selected: true, selectedColor: theme.primary }
+                          }}
+                          theme={{
+                            calendarBackground: theme.surface,
+                            textSectionTitleColor: theme.textSecondary,
+                            selectedDayBackgroundColor: theme.primary,
+                            selectedDayTextColor: theme.background,
+                            todayTextColor: theme.primary,
+                            dayTextColor: theme.text,
+                            textDisabledColor: theme.textTertiary,
+                            monthTextColor: theme.text,
+                            arrowColor: theme.primary,
+                          }}
+                        />
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.datePickerContainer}>
+                    <Text style={[styles.dateLabel, { color: theme.text }]}>Конечная дата:</Text>
+                    <TouchableOpacity
+                      style={[styles.dateButton, { 
+                        backgroundColor: theme.background, 
+                        borderColor: showEndCalendar ? theme.primary : theme.border 
+                      }]}
+                      onPress={() => {
+                        setShowEndCalendar(!showEndCalendar);
+                        setShowStartCalendar(false);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                    >
+                      <Ionicons 
+                        name="calendar-outline" 
+                        size={20} 
+                        color={pdfEndDate ? theme.primary : theme.textSecondary} 
+                      />
+                      <Text style={[styles.dateButtonText, { 
+                        color: pdfEndDate ? theme.text : theme.textTertiary 
+                      }]}>
+                        {pdfEndDate || 'Выберите дату'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    {showEndCalendar && (
+                      <View style={styles.calendarWrapper}>
+                        <Calendar
+                          current={pdfEndDate || pdfStartDate || new Date().toISOString().split('T')[0]}
+                          onDayPress={handleEndDateSelect}
+                          markedDates={{
+                            [pdfEndDate]: { selected: true, selectedColor: theme.primary }
+                          }}
+                          theme={{
+                            calendarBackground: theme.surface,
+                            textSectionTitleColor: theme.textSecondary,
+                            selectedDayBackgroundColor: theme.primary,
+                            selectedDayTextColor: theme.background,
+                            todayTextColor: theme.primary,
+                            dayTextColor: theme.text,
+                            textDisabledColor: theme.textTertiary,
+                            monthTextColor: theme.text,
+                            arrowColor: theme.primary,
+                          }}
+                        />
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Конкретные даты */}
+              {pdfFilterMode === 'specific' && (
+                <View>
+                  <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+                    Выберите даты на календаре (можно выбрать несколько):
+                  </Text>
+                  <View style={styles.calendarWrapper}>
+                    <Calendar
+                      onDayPress={handleDayPress}
+                      markedDates={pdfSelectedDates}
+                      markingType={'multi-dot'}
+                      theme={{
+                        calendarBackground: theme.surface,
+                        textSectionTitleColor: theme.textSecondary,
+                        selectedDayBackgroundColor: theme.primary,
+                        selectedDayTextColor: theme.background,
+                        todayTextColor: theme.primary,
+                        dayTextColor: theme.text,
+                        textDisabledColor: theme.textTertiary,
+                        monthTextColor: theme.text,
+                        arrowColor: theme.primary,
+                      }}
+                    />
+                  </View>
+                  <Text style={[styles.selectedCount, { color: theme.primary }]}>
+                    Выбрано дат: {Object.keys(pdfSelectedDates).filter(date => pdfSelectedDates[date].selected).length}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button
+              onPress={() => {
+                setPdfFilterVisible(false);
+                setPdfStartDate('');
+                setPdfEndDate('');
+                setPdfSelectedDates({});
+              }}
+              textColor={theme.textSecondary}
+            >
+              Отмена
+            </Button>
+            <Button
+              onPress={handleExportPDFFiltered}
+              loading={exporting}
+              disabled={exporting}
+              textColor={theme.primary}
+            >
+              Экспортировать
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </SafeAreaView>
   );
@@ -588,5 +857,73 @@ const styles = StyleSheet.create({
   aboutText: {
     fontSize: fontSize.md,
     marginTop: spacing.xs,
+  },
+  pdfFilterModeButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+    marginTop: spacing.sm,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  modeButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  datePickerContainer: {
+    marginBottom: spacing.xl,
+  },
+  dateLabel: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+    letterSpacing: 0.5,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    gap: spacing.md,
+    minHeight: 56,
+  },
+  dateButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    flex: 1,
+  },
+  calendarWrapper: {
+    marginTop: spacing.lg,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  infoText: {
+    fontSize: fontSize.md,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  selectedCount: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    marginTop: spacing.lg,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
 });

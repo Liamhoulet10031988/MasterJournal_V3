@@ -196,7 +196,7 @@ export const AppStoreProvider = ({ children }) => {
 
   // ==================== ЭКСПОРТ/ИМПОРТ ====================
 
-  const exportData = async (format = 'json') => {
+  const exportData = async (format = 'json', filterOptions = null) => {
     try {
       if (format === 'json') {
         return await storage.exportJSON();
@@ -204,10 +204,18 @@ export const AppStoreProvider = ({ children }) => {
         return await storage.exportJSONRussian();
       } else if (format === 'csv') {
         return await storage.exportCSV();
-      } else if (format === 'xlsx') {
-        return await storage.exportXLSX();
       } else if (format === 'pdf') {
         return await storage.exportPDF();
+      } else if (format === 'pdf-filtered') {
+        // filterOptions: { dates: ['2025-11-01', '2025-11-02'] } или { startDate: '2025-11-01', endDate: '2025-11-05' }
+        if (!filterOptions) {
+          throw new Error('Не указаны параметры фильтрации');
+        }
+        return await storage.exportPDFFiltered(
+          filterOptions.dates || null,
+          filterOptions.startDate || null,
+          filterOptions.endDate || null
+        );
       }
       throw new Error('Неизвестный формат');
     } catch (error) {

@@ -65,6 +65,8 @@ export default function HistoryScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isDateFiltered, setIsDateFiltered] = useState(false);
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   // Календарь
   const [selectedDate, setSelectedDate] = useState('');
@@ -171,7 +173,21 @@ export default function HistoryScreen() {
     setEndDate('');
     setIsDateFiltered(false);
     setDateFilterModalVisible(false);
+    setShowStartCalendar(false);
+    setShowEndCalendar(false);
     handleSearch(searchQuery);
+  };
+
+  const handleStartDateSelect = (day) => {
+    setStartDate(day.dateString);
+    setShowStartCalendar(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleEndDateSelect = (day) => {
+    setEndDate(day.dateString);
+    setShowEndCalendar(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const onRefresh = useCallback(async () => {
@@ -570,6 +586,7 @@ export default function HistoryScreen() {
                   onSubmit={handleUpdateOrder}
                   onCancel={() => setEditModalVisible(false)}
                   submitLabel="Сохранить изменения"
+                  isModal={true}
                 />
               </ScrollView>
             )}
@@ -578,40 +595,120 @@ export default function HistoryScreen() {
           {/* Модальное окно фильтра по датам */}
           <Modal
             visible={dateFilterModalVisible}
-            onDismiss={() => setDateFilterModalVisible(false)}
-            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
+            onDismiss={() => {
+              setDateFilterModalVisible(false);
+              setShowStartCalendar(false);
+              setShowEndCalendar(false);
+            }}
+            contentContainerStyle={[styles.modalContent, styles.dateFilterModal, { backgroundColor: theme.surface }]}
           >
-            <View>
+            <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalTitle, { color: theme.primary }]}>
                 Фильтр по датам
               </Text>
               <Divider style={[styles.divider, { backgroundColor: theme.border }]} />
 
-              <TextInput
-                label="Начальная дата"
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="ГГГГ-ММ-ДД"
-                style={[styles.dateInput, { backgroundColor: theme.surface }]}
-                mode="outlined"
-                outlineColor={theme.border}
-                activeOutlineColor={theme.primary}
-                textColor={theme.text}
-                theme={{ colors: { placeholder: theme.textTertiary } }}
-              />
+              {/* Начальная дата */}
+              <View style={styles.datePickerContainer}>
+                <Text style={[styles.dateLabel, { color: theme.text }]}>Начальная дата:</Text>
+                <TouchableOpacity
+                  style={[styles.dateButton, { 
+                    backgroundColor: theme.background, 
+                    borderColor: showStartCalendar ? theme.primary : theme.border 
+                  }]}
+                  onPress={() => {
+                    setShowStartCalendar(!showStartCalendar);
+                    setShowEndCalendar(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={20} 
+                    color={startDate ? theme.primary : theme.textSecondary} 
+                  />
+                  <Text style={[styles.dateButtonText, { 
+                    color: startDate ? theme.text : theme.textTertiary 
+                  }]}>
+                    {startDate || 'Выберите дату'}
+                  </Text>
+                </TouchableOpacity>
+                
+                {showStartCalendar && (
+                  <View style={styles.calendarWrapper}>
+                    <Calendar
+                      current={startDate || new Date().toISOString().split('T')[0]}
+                      onDayPress={handleStartDateSelect}
+                      markedDates={{
+                        [startDate]: { selected: true, selectedColor: theme.primary }
+                      }}
+                      theme={{
+                        calendarBackground: theme.surface,
+                        textSectionTitleColor: theme.textSecondary,
+                        selectedDayBackgroundColor: theme.primary,
+                        selectedDayTextColor: theme.background,
+                        todayTextColor: theme.primary,
+                        dayTextColor: theme.text,
+                        textDisabledColor: theme.textTertiary,
+                        monthTextColor: theme.text,
+                        arrowColor: theme.primary,
+                        textMonthFontWeight: '700',
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
 
-              <TextInput
-                label="Конечная дата"
-                value={endDate}
-                onChangeText={setEndDate}
-                placeholder="ГГГГ-ММ-ДД"
-                style={[styles.dateInput, { backgroundColor: theme.surface }]}
-                mode="outlined"
-                outlineColor={theme.border}
-                activeOutlineColor={theme.primary}
-                textColor={theme.text}
-                theme={{ colors: { placeholder: theme.textTertiary } }}
-              />
+              {/* Конечная дата */}
+              <View style={styles.datePickerContainer}>
+                <Text style={[styles.dateLabel, { color: theme.text }]}>Конечная дата:</Text>
+                <TouchableOpacity
+                  style={[styles.dateButton, { 
+                    backgroundColor: theme.background, 
+                    borderColor: showEndCalendar ? theme.primary : theme.border 
+                  }]}
+                  onPress={() => {
+                    setShowEndCalendar(!showEndCalendar);
+                    setShowStartCalendar(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Ionicons 
+                    name="calendar-outline" 
+                    size={20} 
+                    color={endDate ? theme.primary : theme.textSecondary} 
+                  />
+                  <Text style={[styles.dateButtonText, { 
+                    color: endDate ? theme.text : theme.textTertiary 
+                  }]}>
+                    {endDate || 'Выберите дату'}
+                  </Text>
+                </TouchableOpacity>
+                
+                {showEndCalendar && (
+                  <View style={styles.calendarWrapper}>
+                    <Calendar
+                      current={endDate || startDate || new Date().toISOString().split('T')[0]}
+                      onDayPress={handleEndDateSelect}
+                      markedDates={{
+                        [endDate]: { selected: true, selectedColor: theme.primary }
+                      }}
+                      theme={{
+                        calendarBackground: theme.surface,
+                        textSectionTitleColor: theme.textSecondary,
+                        selectedDayBackgroundColor: theme.primary,
+                        selectedDayTextColor: theme.background,
+                        todayTextColor: theme.primary,
+                        dayTextColor: theme.text,
+                        textDisabledColor: theme.textTertiary,
+                        monthTextColor: theme.text,
+                        arrowColor: theme.primary,
+                        textMonthFontWeight: '700',
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
 
               <View style={styles.dateFilterButtons}>
                 <Button
@@ -619,6 +716,7 @@ export default function HistoryScreen() {
                   onPress={applyDateFilter}
                   style={[styles.dateFilterButton, { backgroundColor: theme.primary }]}
                   textColor={theme.background}
+                  disabled={!startDate || !endDate}
                 >
                   Применить
                 </Button>
@@ -631,7 +729,7 @@ export default function HistoryScreen() {
                   Сбросить
                 </Button>
               </View>
-            </View>
+            </ScrollView>
           </Modal>
         </Portal>
 
@@ -811,10 +909,43 @@ const styles = StyleSheet.create({
   dateInput: {
     marginBottom: spacing.md,
   },
+  dateFilterModal: {
+    maxHeight: '90%',
+  },
+  datePickerContainer: {
+    marginBottom: spacing.lg,
+  },
+  dateLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    gap: spacing.sm,
+  },
+  dateButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '500',
+  },
+  calendarWrapper: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
   dateFilterButtons: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.md,
+    marginTop: spacing.xl,
   },
   dateFilterButton: {
     flex: 1,

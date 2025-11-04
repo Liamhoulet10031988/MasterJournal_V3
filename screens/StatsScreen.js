@@ -8,13 +8,24 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from 'react-native-paper';
+import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAppStore } from '../store/AppStore';
 import { formatAmount } from '../utils/formatters';
 import { darkTheme, lightTheme, spacing, borderRadius, fontSize, fontWeight, getPayTypeColor } from '../utils/theme';
 
+LocaleConfig.locales['ru'] = {
+  monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+  monthNamesShort: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
+  dayNames: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
+  dayNamesShort: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+  today: 'Сегодня'
+};
+LocaleConfig.defaultLocale = 'ru';
+
 const PERIODS = [
+  { label: 'День', days: 1 },
   { label: 'Неделя', days: 7 },
   { label: 'Месяц', days: 30 },
   { label: '3 месяца', days: 90 },
@@ -22,29 +33,76 @@ const PERIODS = [
 ];
 
 export default function StatsScreen() {
-  const { stats, refreshStats, theme: themeMode } = useAppStore();
+  const { stats, refreshStats, orders, theme: themeMode } = useAppStore();
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
 
-  const [selectedPeriod, setSelectedPeriod] = useState(1); // Месяц по умолчанию
+  const [selectedPeriod, setSelectedPeriod] = useState(2); // Месяц по умолчанию (индекс 2)
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [markedDates, setMarkedDates] = useState({});
 
   useEffect(() => {
     loadStats();
-  }, [selectedPeriod]);
+  }, [selectedPeriod, selectedDate]);
+
+  useEffect(() => {
+    updateMarkedDates();
+  }, [orders]);
+
+  const updateMarkedDates = () => {
+    const marked = {};
+    orders.forEach(order => {
+      if (!marked[order.date]) {
+        marked[order.date] = {
+          marked: true,
+          dotColor: theme.primary,
+        };
+      }
+    });
+    
+    if (selectedDate && marked[selectedDate]) {
+      marked[selectedDate] = {
+        ...marked[selectedDate],
+        selected: true,
+        selectedColor: theme.primary,
+      };
+    } else if (selectedDate) {
+      marked[selectedDate] = {
+        selected: true,
+        selectedColor: theme.primary,
+      };
+    }
+    
+    setMarkedDates(marked);
+  };
 
   const loadStats = async () => {
-    const days = PERIODS[selectedPeriod].days;
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    if (selectedPeriod === 0) {
+      // День - используем selectedDate
+      await refreshStats(selectedDate, selectedDate);
+    } else {
+      const days = PERIODS[selectedPeriod].days;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
 
-    const start = startDate.toISOString().split('T')[0];
-    const end = endDate.toISOString().split('T')[0];
+      const start = startDate.toISOString().split('T')[0];
+      const end = endDate.toISOString().split('T')[0];
 
-    await refreshStats(start, end);
+      await refreshStats(start, end);
+    }
   };
 
   const selectPeriod = (index) => {
     setSelectedPeriod(index);
+    if (index === 0) {
+      // День - устанавливаем сегодня
+      setSelectedDate(new Date().toISOString().split('T')[0]);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const onDayPress = (day) => {
+    setSelectedDate(day.dateString);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -93,7 +151,7 @@ export default function StatsScreen() {
         <View style={styles.periodSelector}>
           {PERIODS.map((period, index) => (
             <TouchableOpacity
-              key={index}
+              key={`period-${period.days}-${index}`}
               style={[
                 styles.periodButton,
                 {
@@ -118,6 +176,38 @@ export default function StatsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Календарь для выбора дня */}
+        {selectedPeriod === 0 && (
+          <View style={styles.calendarContainer}>
+            <Calendar
+              markedDates={markedDates}
+              onDayPress={onDayPress}
+              theme={{
+                calendarBackground: theme.surface,
+                textSectionTitleColor: theme.textSecondary,
+                selectedDayBackgroundColor: theme.primary,
+                selectedDayTextColor: theme.background,
+                todayTextColor: theme.primary,
+                dayTextColor: theme.text,
+                textDisabledColor: theme.textTertiary,
+                monthTextColor: theme.text,
+                arrowColor: theme.primary,
+                textMonthFontWeight: '700',
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+              }}
+              style={[styles.calendar, { backgroundColor: theme.surface }]}
+              enableSwipeMonths={true}
+              hideExtraDays={false}
+            />
+            <View style={styles.selectedDateInfo}>
+              <Text style={[styles.selectedDateText, { color: theme.text }]}>
+                Статистика за {selectedDate}:
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Общая статистика */}
         <Card style={[styles.totalCard, { backgroundColor: theme.surface }]}>
@@ -219,7 +309,7 @@ export default function StatsScreen() {
         {stats.byType && stats.byType.length > 0 ? (
           stats.byType.map((item, index) => (
             <PayTypeCard
-              key={index}
+              key={`paytype-${item.payType}-${index}`}
               payType={item.payType}
               amount={item.total}
               workAmount={item.totalWork || 0}
@@ -345,6 +435,7 @@ const styles = StyleSheet.create({
   },
   periodSelector: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
@@ -519,5 +610,25 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fontSize.md,
     marginTop: spacing.md,
+  },
+  calendarContainer: {
+    marginBottom: spacing.xl,
+  },
+  calendar: {
+    borderRadius: borderRadius.lg,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  selectedDateInfo: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  selectedDateText: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
   },
 });
